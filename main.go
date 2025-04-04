@@ -192,6 +192,7 @@ func printResults(results []*speedtester.Result) {
 func saveConfig(results []*speedtester.Result) error {
 	filteredResults := make([]*speedtester.Result, 0)
 	for _, result := range results {
+
 		if *maxLatency > 0 && result.Latency > *maxLatency {
 			continue
 		}
