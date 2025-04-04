@@ -106,7 +106,6 @@ func generateVlessLink(proxyName string, config map[string]any) (string, error) 
 	} else {
 		link += "&security=none"
 	}
-
 	// 添加备注
 	link += "#" + url.PathEscape(proxyName)
 
