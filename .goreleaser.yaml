@@ -19,7 +19,6 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-      {{- if .IsSnapshot }}_{{ .ShortCommit }}_{{ .CommitDate }}{{ end }}
     format_overrides:
     - goos: windows
       format: zip
@@ -27,9 +26,6 @@ checksum:
   name_template: 'checksums.txt'
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
-release:
-  prerelease: auto
-  mode: replace
 changelog:
   sort: asc
   filters:
