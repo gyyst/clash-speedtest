@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -212,6 +213,12 @@ func saveConfig(results []*speedtester.Result) error {
 		if err != nil {
 			// 如果生成链接失败，使用代理名称
 			link = result.ProxyName
+		} else {
+			// 对URL进行解码处理
+			decodedLink, err := url.QueryUnescape(link)
+			if err == nil {
+				link = decodedLink
+			}
 		}
 		// 将代理链接添加到文本行中
 		lines = append(lines, link)

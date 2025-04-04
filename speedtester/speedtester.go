@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -301,21 +302,36 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 	latencies := make([]time.Duration, 0, 6)
 	failedPings := 0
 
-	for i := 0; i < 6; i++ {
-		time.Sleep(50 * time.Millisecond)
+	latencyResults := make(chan time.Duration, 10)
+	var wg sync.WaitGroup
 
-		start := time.Now()
-		resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
-		if err != nil {
-			failedPings++
-			continue
-		}
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			latencies = append(latencies, time.Since(start))
-		} else {
-			failedPings++
-		}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			time.Sleep(50 * time.Millisecond)
+
+			start := time.Now()
+			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
+			if err != nil {
+				failedPings++
+				return
+			}
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				latencyResults <- time.Since(start)
+			} else {
+				failedPings++
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(latencyResults)
+
+	latencies = make([]time.Duration, 0, len(latencyResults))
+	for latency := range latencyResults {
+		latencies = append(latencies, latency)
 	}
 
 	return calculateLatencyStats(latencies, failedPings)
@@ -397,19 +413,32 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 
 func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyResult {
 	result := &latencyResult{
-		packetLoss: float64(failedPings) / 6.0 * 100,
+		packetLoss: float64(failedPings) / 10.0 * 100,
 	}
 
 	if len(latencies) == 0 {
 		return result
 	}
 
-	// 计算平均延迟
+	// 先对延迟数组进行排序
+	sort.Slice(latencies, func(i, j int) bool {
+		return latencies[i] < latencies[j]
+	})
+
+	// 去掉最高和最低值后再计算平均延迟
 	var total time.Duration
-	for _, l := range latencies {
-		total += l
+	count := len(latencies)
+	if count > 2 {
+		for _, l := range latencies[1 : count-1] {
+			total += l
+		}
+		result.avgLatency = total / time.Duration(count-2)
+	} else {
+		for _, l := range latencies {
+			total += l
+		}
+		result.avgLatency = total / time.Duration(count)
 	}
-	result.avgLatency = total / time.Duration(len(latencies))
 
 	// 计算抖动
 	var variance float64

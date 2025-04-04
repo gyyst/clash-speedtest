@@ -89,7 +89,6 @@ func generateVlessLink(proxyName string, config map[string]any) (string, error) 
 	port := getStringValue(config, "port")
 	network := getStringValue(config, "network", "tcp")
 	path := getStringValue(config, "ws-path", "/")
-
 	// 构建vless链接
 	link := fmt.Sprintf("vless://%s@%s:%s?type=%s", uuid, server, port, network)
 
@@ -104,10 +103,12 @@ func generateVlessLink(proxyName string, config map[string]any) (string, error) 
 		if sni, ok := config["servername"].(string); ok && sni != "" {
 			link += "&sni=" + sni
 		}
+	} else {
+		link += "&security=none"
 	}
 
 	// 添加备注
-	link += "#" + proxyName
+	link += "#" + url.PathEscape(proxyName)
 
 	return link, nil
 }
@@ -131,7 +132,7 @@ func generateTrojanLink(proxyName string, config map[string]any) (string, error)
 	}
 
 	// 添加备注
-	link += "#" + proxyName
+	link += "#" + url.PathEscape(proxyName)
 
 	return link, nil
 }
@@ -155,7 +156,7 @@ func generateShadowsocksLink(proxyName string, config map[string]any) (string, e
 	link := fmt.Sprintf("ss://%s@%s:%s", userInfoBase64, server, port)
 
 	// 添加备注
-	link += "#" + proxyName
+	link += "#" + url.PathEscape(proxyName)
 
 	return link, nil
 }
@@ -208,7 +209,10 @@ func generateHysteria2Link(proxyName string, config map[string]any) (string, err
 	if sni := getStringValue(config, "sni"); sni != "" {
 		params.Add("sni", sni)
 	}
-
+	// 添加可选参数
+	if insecure := getStringValue(config, "insecure"); insecure != "" {
+		params.Add("insecure", insecure)
+	}
 	if obfs := getStringValue(config, "obfs"); obfs != "" {
 		params.Add("obfs", obfs)
 		if obfsPassword := getStringValue(config, "obfs-password"); obfsPassword != "" {
