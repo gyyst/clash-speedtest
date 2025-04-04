@@ -89,6 +89,7 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 		if err := yaml.Unmarshal(body, rawCfg); err != nil {
 			return nil, err
 		}
+
 		proxies := make(map[string]*CProxy)
 		proxiesConfig := rawCfg.Proxies
 		providersConfig := rawCfg.Providers
