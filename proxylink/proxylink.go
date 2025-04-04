@@ -199,7 +199,7 @@ func generateHysteria2Link(proxyName string, config map[string]any) (string, err
 	}
 
 	// 构建基本URL
-	link := fmt.Sprintf("hy2://%s@%s:%s", password, server, port)
+	link := fmt.Sprintf("hysteria2://%s@%s:%s", password, server, port)
 
 	// 添加查询参数
 	params := url.Values{}
