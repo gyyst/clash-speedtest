@@ -45,11 +45,11 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 创建并推送新标签
+          # 使用 PAT 进行认证
+          git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}
+          
           git tag -a "$new_version" -m "Release $new_version"
           git push origin "$new_version"
-          
-          echo "NEW_VERSION=$new_version" >> $GITHUB_ENV
         shell: bash
       
       - name: Output new version
