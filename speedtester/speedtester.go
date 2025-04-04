@@ -302,7 +302,7 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 	failedPings := 0
 
 	for i := 0; i < 6; i++ {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 
 		start := time.Now()
 		resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
