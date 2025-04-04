@@ -8,11 +8,9 @@ on:
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
-  
-  # 触发条件2: 标签推送（触发构建）
-  push:
     tags:
       - 'v*'
+
 
 jobs:
   # 第一阶段：自动打标签
