@@ -63,6 +63,7 @@ type RawConfig struct {
 
 func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 	allProxies := make(map[string]*CProxy)
+
 	for _, configPath := range strings.Split(st.config.ConfigPaths, ",") {
 		var body []byte
 		var err error
