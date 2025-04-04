@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/faceair/clash-speedtest/proxylink"
 	"github.com/faceair/clash-speedtest/speedtester"
 	"github.com/metacubex/mihomo/log"
 	"github.com/olekukonko/tablewriter"
 	"github.com/schollz/progressbar/v3"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -199,18 +200,22 @@ func saveConfig(results []*speedtester.Result) error {
 		filteredResults = append(filteredResults, result)
 	}
 
-	proxies := make([]map[string]any, 0)
+	// 创建文本内容，每行一个代理链接
+	lines := make([]string, 0, len(filteredResults))
 	for _, result := range filteredResults {
-		proxies = append(proxies, result.ProxyConfig)
+		// 生成代理链接
+		link, err := proxylink.GenerateProxyLink(result.ProxyName, result.ProxyType, result.ProxyConfig)
+		if err != nil {
+			// 如果生成链接失败，使用代理名称
+			link = result.ProxyName
+		}
+		// 将代理链接添加到文本行中
+		lines = append(lines, link)
 	}
 
-	config := &speedtester.RawConfig{
-		Proxies: proxies,
-	}
-	yamlData, err := yaml.Marshal(config)
-	if err != nil {
-		return err
-	}
+	// 将所有行合并为一个字符串，每行一个代理链接
+	txtData := strings.Join(lines, "\n")
 
-	return os.WriteFile(*outputPath, yamlData, 0o644)
+	// 写入文件
+	return os.WriteFile(*outputPath, []byte(txtData), 0o644)
 }
