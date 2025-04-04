@@ -145,9 +145,20 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 }
 
 func (st *SpeedTester) TestProxies(proxies map[string]*CProxy, fn func(result *Result)) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for name, proxy := range proxies {
-		fn(st.testProxy(name, proxy))
+		wg.Add(1)
+		go func(name string, proxy *CProxy) {
+			defer wg.Done()
+			result := st.testProxy(name, proxy)
+			mu.Lock()
+			fn(result)
+			mu.Unlock()
+		}(name, proxy)
 	}
+	wg.Wait()
 }
 
 type testJob struct {
