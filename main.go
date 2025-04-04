@@ -26,6 +26,7 @@ var (
 	outputPath        = flag.String("output", "", "output config file path")
 	maxLatency        = flag.Duration("max-latency", 800*time.Millisecond, "filter latency greater than this value")
 	minSpeed          = flag.Float64("min-speed", 5, "filter speed less than this value(unit: MB/s)")
+	minUploadSpeed    = flag.Float64("min-upload-speed", 0, "filter upload speed less than this value(unit: MB/s)")
 )
 
 const (
@@ -195,6 +196,9 @@ func saveConfig(results []*speedtester.Result) error {
 			continue
 		}
 		if *minSpeed > 0 && float64(result.DownloadSpeed)/(1024*1024) < *minSpeed {
+			continue
+		}
+		if *minUploadSpeed > 0 && float64(result.UploadSpeed)/(1024*1024) < *minUploadSpeed {
 			continue
 		}
 		filteredResults = append(filteredResults, result)

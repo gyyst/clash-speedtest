@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,3 +27,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # 确保每次构建都是唯一的，即使是相同的标签
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}_${{ github.run_id }}
