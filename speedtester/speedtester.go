@@ -357,7 +357,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			}
 		}()
 	}
-
+	fmt.Println(checkCNNetwork(proxy))
 	//测试server的中国连通性
 	if !checkCNNetwork(proxy) {
 		failedPings = 10
@@ -449,7 +449,7 @@ func sendNetworkRequest(ip string) bool {
 	// 检查所有字段是否都为true
 	if !response.Error && response.Data.Success {
 		netData := response.Data.Data
-		return netData.InnerICMP && netData.InnerTCP && netData.OutICMP && netData.OutTCP
+		return netData.InnerICMP && netData.OutICMP
 	}
 
 	return false
