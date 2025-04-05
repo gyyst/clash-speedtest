@@ -150,42 +150,32 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 }
 
 func (st *SpeedTester) TestProxies(proxies map[string]*CProxy, fn func(result *Result)) {
-	// 创建工作队列
-	jobs := make(chan testJob, len(proxies))
+	ch := make(chan *Result, len(proxies))
 
-	// 创建结果通道，确保有足够的缓冲区
-	results := make(chan *Result, len(proxies))
+	// 创建一个信号量来控制并发数
+	sem := make(chan struct{}, st.config.TestConcurrent)
 
-	// 将所有代理添加到工作队列
+	// 启动goroutine进行测试
 	for name, proxy := range proxies {
-		jobs <- testJob{name: name, proxy: proxy}
-	}
-	close(jobs)
+		go func(name string, proxy *CProxy) {
+			// 获取信号量
+			sem <- struct{}{}
+			// 测试完成后释放信号量
+			defer func() { <-sem }()
 
-	// 启动工作协程池
-	var wg sync.WaitGroup
-	workerCount := st.config.TestConcurrent
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for job := range jobs {
-				result := st.testProxy(job.name, job.proxy)
-				results <- result
-			}
-		}()
+			// 执行测试并将结果发送到通道
+			ch <- st.testProxy(name, proxy)
+		}(name, proxy)
 	}
 
-	// 等待所有工作完成并关闭结果通道
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// 处理结果
-	for result := range results {
+	// 收集所有结果
+	for i := 0; i < len(proxies); i++ {
+		result := <-ch
 		fn(result)
 	}
+
+	// 关闭通道
+	close(ch)
 }
 
 type testJob struct {
@@ -257,8 +247,9 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	result.Latency = latencyResult.avgLatency
 	result.Jitter = latencyResult.jitter
 	result.PacketLoss = latencyResult.packetLoss
+
 	// 如果延迟测试完全失败，直接返回
-	if result.PacketLoss >= 50 {
+	if result.PacketLoss == 100 {
 		return result
 	}
 

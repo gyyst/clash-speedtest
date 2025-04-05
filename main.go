@@ -24,11 +24,13 @@ var (
 	uploadSize        = flag.Int("upload-size", 20*1024*1024, "upload size for testing proxies")
 	timeout           = flag.Duration("timeout", time.Second*5, "timeout for testing proxies")
 	concurrent        = flag.Int("concurrent", 4, "download concurrent size")
+	testConcurrent    = flag.Int("test-concurrent", 2, "test proxies concurrent size")
 	outputPath        = flag.String("output", "result.txt", "output config file path")
 	maxLatency        = flag.Duration("max-latency", 800*time.Millisecond, "filter latency greater than this value")
 	minSpeed          = flag.Float64("min-speed", 5, "filter speed less than this value(unit: MB/s)")
 	minUploadSpeed    = flag.Float64("min-upload-speed", 0, "filter upload speed less than this value(unit: MB/s)")
 	maxPacketLoss     = flag.Float64("max-packet-loss", 0, "filter packet loss greater than this value(unit: %)")
+	limit             = flag.Int("limit", 0, "limit the number of proxies in output file, 0 means no limit")
 )
 
 const (
@@ -47,13 +49,14 @@ func main() {
 	}
 
 	speedTester := speedtester.New(&speedtester.Config{
-		ConfigPaths:  *configPathsConfig,
-		FilterRegex:  *filterRegexConfig,
-		ServerURL:    *serverURL,
-		DownloadSize: *downloadSize,
-		UploadSize:   *uploadSize,
-		Timeout:      *timeout,
-		Concurrent:   *concurrent,
+		ConfigPaths:    *configPathsConfig,
+		FilterRegex:    *filterRegexConfig,
+		ServerURL:      *serverURL,
+		DownloadSize:   *downloadSize,
+		UploadSize:     *uploadSize,
+		Timeout:        *timeout,
+		Concurrent:     *concurrent,
+		TestConcurrent: *testConcurrent,
 	})
 
 	allProxies, err := speedTester.LoadProxies()
@@ -207,6 +210,11 @@ func saveConfig(results []*speedtester.Result) error {
 			continue
 		}
 		filteredResults = append(filteredResults, result)
+	}
+
+	// 应用limit参数限制代理数量
+	if *limit > 0 && len(filteredResults) > *limit {
+		filteredResults = filteredResults[:*limit]
 	}
 
 	// 创建文本内容，每行一个代理链接
