@@ -251,8 +251,6 @@ func getBaseParams(config map[string]any, authKey string) string {
 
 // ================== Config Handlers ==================
 func handleTLSConfig(config map[string]any, params url.Values) {
-	fmt.Println(config)
-	fmt.Println(getBool(config, "tls"))
 	if getBool(config, "tls") {
 		params.Set("security", "reality")
 		if sni := getString(config, "servername", getString(config, "sni")); sni != "" {

@@ -1,11 +1,15 @@
 package speedtester
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"math/rand"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"os"
@@ -325,7 +329,7 @@ type latencyResult struct {
 	packetLoss float64
 }
 
-func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
+func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	client := st.createClient(proxy)
 	failedPings := 0
 
@@ -354,7 +358,15 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 		}()
 	}
 
+	//测试server的中国连通性
+	if !checkCNNetwork(proxy) {
+		failedPings = 10
+	}
 	wg.Wait()
+	if failedPings > 10 {
+		failedPings = 10
+
+	}
 	close(latencyResults)
 
 	latencies := make([]time.Duration, 0, len(latencyResults))
@@ -368,6 +380,79 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 type downloadResult struct {
 	bytes    int64
 	duration time.Duration
+}
+
+func checkCNNetwork(proxy *CProxy) bool {
+	// 获取服务器地址,如果是域名则解析IP
+	server := getString(proxy.Config, "server")
+	if server != "" {
+		// 检查是否为域名
+		if ips, err := net.LookupIP(server); err == nil {
+			// 如果能成功解析IP,则使用第一个IP地址
+			for _, ip := range ips {
+				if ipv4 := ip.To4(); ipv4 != nil {
+					server = ipv4.String()
+					break
+				}
+			}
+		}
+		return sendNetworkRequest(server)
+	}
+	return false
+}
+
+func sendNetworkRequest(ip string) bool {
+	url := "https://www.vps234.com/ipcheck/getdata/"
+	method := "POST"
+
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+	_ = writer.WriteField("ip", ip)
+	_ = writer.Close()
+
+	client := &http.Client{}
+	req, _ := http.NewRequest(method, url, payload)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	res, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return false
+	}
+
+	// 定义JSON响应结构
+	type NetworkCheckData struct {
+		InnerICMP bool `json:"innerICMP"`
+		InnerTCP  bool `json:"innerTCP"`
+		OutICMP   bool `json:"outICMP"`
+		OutTCP    bool `json:"outTCP"`
+	}
+
+	type NetworkCheckResponse struct {
+		Error bool `json:"error"`
+		Data  struct {
+			Success bool             `json:"success"`
+			Msg     string           `json:"msg"`
+			Data    NetworkCheckData `json:"data"`
+		} `json:"data"`
+	}
+
+	// 解析JSON响应
+	var response NetworkCheckResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return false
+	}
+
+	// 检查所有字段是否都为true
+	if !response.Error && response.Data.Success {
+		netData := response.Data.Data
+		return netData.InnerICMP && netData.InnerTCP && netData.OutICMP && netData.OutTCP
+	}
+
+	return false
 }
 
 func (st *SpeedTester) testDownload(proxy constant.Proxy, size int) *downloadResult {
@@ -478,4 +563,22 @@ func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyR
 	result.jitter = time.Duration(math.Sqrt(variance))
 
 	return result
+}
+
+func getString(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := m[key]; ok {
+			switch v := val.(type) {
+			case string:
+				return v
+			case int:
+				return strconv.Itoa(v)
+			case float64:
+				return fmt.Sprintf("%.0f", v)
+			case bool:
+				return strconv.FormatBool(v)
+			}
+		}
+	}
+	return ""
 }
