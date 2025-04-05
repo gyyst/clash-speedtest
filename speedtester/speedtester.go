@@ -257,9 +257,8 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	result.Latency = latencyResult.avgLatency
 	result.Jitter = latencyResult.jitter
 	result.PacketLoss = latencyResult.packetLoss
-
 	// 如果延迟测试完全失败，直接返回
-	if result.PacketLoss == 100 {
+	if result.PacketLoss >= 50 {
 		return result
 	}
 
