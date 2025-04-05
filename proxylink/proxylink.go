@@ -251,8 +251,10 @@ func getBaseParams(config map[string]any, authKey string) string {
 
 // ================== Config Handlers ==================
 func handleTLSConfig(config map[string]any, params url.Values) {
+	fmt.Println(config)
+	fmt.Println(getBool(config, "tls"))
 	if getBool(config, "tls") {
-		// params.Set("security", "reality")
+		params.Set("security", "reality")
 		if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
 			params.Set("sni", sni)
 		}
@@ -263,11 +265,12 @@ func handleTLSConfig(config map[string]any, params url.Values) {
 			params.Set("alpn", strings.Join(alpn, ","))
 		}
 		// Reality协议处理
-		if pbk := getString(config, "public-key"); pbk != "" {
-			params.Set("security", "reality")
-			params.Set("pbk", pbk)
-			if sid := getString(config, "short-id"); sid != "" {
-				params.Set("sid", sid)
+		if realityOpts, ok := config["reality-opts"].(map[string]any); ok {
+			if pbk := getString(realityOpts, "public-key"); pbk != "" {
+				params.Set("pbk", pbk)
+				if sid := getString(realityOpts, "short-id"); sid != "" {
+					params.Set("sid", sid)
+				}
 			}
 		}
 	}
