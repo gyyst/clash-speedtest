@@ -145,26 +145,9 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 }
 
 func (st *SpeedTester) TestProxies(proxies map[string]*CProxy, fn func(result *Result)) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	concurrency := 2
-	sem := make(chan struct{}, concurrency)
-
 	for name, proxy := range proxies {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(name string, proxy *CProxy) {
-			defer func() {
-				<-sem
-				wg.Done()
-			}()
-			result := st.testProxy(name, proxy)
-			mu.Lock()
-			fn(result)
-			mu.Unlock()
-		}(name, proxy)
+		fn(st.testProxy(name, proxy))
 	}
-	wg.Wait()
 }
 
 type testJob struct {
