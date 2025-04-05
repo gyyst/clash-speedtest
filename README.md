@@ -39,6 +39,10 @@ Usage of clash-speedtest:
         filter latency greater than this value (default 800ms)
   -min-speed float
         filter speed less than this value(unit: MB/s) (default 5)
+  -min-upload-speed float
+        filter upload speed less than this value(unit: MB/s) (default 0)
+  -max-packet-loss float
+        filter packet loss greater than this value(unit: %) (default 0)
 
 # 演示：
 

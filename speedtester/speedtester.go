@@ -24,13 +24,14 @@ import (
 )
 
 type Config struct {
-	ConfigPaths  string
-	FilterRegex  string
-	ServerURL    string
-	DownloadSize int
-	UploadSize   int
-	Timeout      time.Duration
-	Concurrent   int
+	ConfigPaths    string
+	FilterRegex    string
+	ServerURL      string
+	DownloadSize   int
+	UploadSize     int
+	Timeout        time.Duration
+	Concurrent     int
+	TestConcurrent int
 }
 
 type SpeedTester struct {
@@ -46,6 +47,9 @@ func New(config *Config) *SpeedTester {
 	}
 	if config.UploadSize <= 0 {
 		config.UploadSize = 10 * 1024 * 1024
+	}
+	if config.TestConcurrent <= 0 {
+		config.TestConcurrent = 2
 	}
 	return &SpeedTester{
 		config: config,
@@ -146,8 +150,41 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 }
 
 func (st *SpeedTester) TestProxies(proxies map[string]*CProxy, fn func(result *Result)) {
+	// 创建工作队列
+	jobs := make(chan testJob, len(proxies))
+
+	// 创建结果通道，确保有足够的缓冲区
+	results := make(chan *Result, len(proxies))
+
+	// 将所有代理添加到工作队列
 	for name, proxy := range proxies {
-		fn(st.testProxy(name, proxy))
+		jobs <- testJob{name: name, proxy: proxy}
+	}
+	close(jobs)
+
+	// 启动工作协程池
+	var wg sync.WaitGroup
+	workerCount := st.config.TestConcurrent
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				result := st.testProxy(job.name, job.proxy)
+				results <- result
+			}
+		}()
+	}
+
+	// 等待所有工作完成并关闭结果通道
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// 处理结果
+	for result := range results {
+		fn(result)
 	}
 }
 

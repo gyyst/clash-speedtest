@@ -106,10 +106,12 @@ func generateTrojanLink(proxyName string, config map[string]any) (string, error)
 	}
 
 	params := url.Values{}
-	if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
+	if sni := getString(config, "sni", getString(config, "sni")); sni != "" {
 		params.Set("sni", sni)
 	}
-
+	if alpn := getSlice(config, "alpn"); len(alpn) > 0 {
+		params.Set("alpn", strings.Join(alpn, ","))
+	}
 	// 网络类型处理
 	switch network := getString(config, "network"); network {
 	case "ws", "grpc":
@@ -188,6 +190,13 @@ func getString(m map[string]any, keys ...string) string {
 	return ""
 }
 
+// getBool 从配置映射中获取布尔值
+// 参数:
+//   - m: 配置映射
+//   - keys: 要查找的键名列表
+//
+// 返回:
+//   - bool: 找到的布尔值，如果未找到则返回false
 func getBool(m map[string]any, keys ...string) bool {
 	for _, key := range keys {
 		if val, ok := m[key]; ok {
@@ -243,7 +252,7 @@ func getBaseParams(config map[string]any, authKey string) string {
 // ================== Config Handlers ==================
 func handleTLSConfig(config map[string]any, params url.Values) {
 	if getBool(config, "tls") {
-		params.Set("security", "tls")
+		// params.Set("security", "reality")
 		if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
 			params.Set("sni", sni)
 		}
@@ -253,16 +262,16 @@ func handleTLSConfig(config map[string]any, params url.Values) {
 		if alpn := getSlice(config, "alpn"); len(alpn) > 0 {
 			params.Set("alpn", strings.Join(alpn, ","))
 		}
-	}
-
-	// Reality协议处理
-	if pbk := getString(config, "public-key"); pbk != "" {
-		params.Set("security", "reality")
-		params.Set("pbk", pbk)
-		if sid := getString(config, "short-id"); sid != "" {
-			params.Set("sid", sid)
+		// Reality协议处理
+		if pbk := getString(config, "public-key"); pbk != "" {
+			params.Set("security", "reality")
+			params.Set("pbk", pbk)
+			if sid := getString(config, "short-id"); sid != "" {
+				params.Set("sid", sid)
+			}
 		}
 	}
+
 }
 
 func handleWsConfig(config map[string]any, vmess map[string]any) {

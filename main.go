@@ -24,10 +24,11 @@ var (
 	uploadSize        = flag.Int("upload-size", 20*1024*1024, "upload size for testing proxies")
 	timeout           = flag.Duration("timeout", time.Second*5, "timeout for testing proxies")
 	concurrent        = flag.Int("concurrent", 4, "download concurrent size")
-	outputPath        = flag.String("output", "", "output config file path")
+	outputPath        = flag.String("output", "result.txt", "output config file path")
 	maxLatency        = flag.Duration("max-latency", 800*time.Millisecond, "filter latency greater than this value")
 	minSpeed          = flag.Float64("min-speed", 5, "filter speed less than this value(unit: MB/s)")
 	minUploadSpeed    = flag.Float64("min-upload-speed", 0, "filter upload speed less than this value(unit: MB/s)")
+	maxPacketLoss     = flag.Float64("max-packet-loss", 0, "filter packet loss greater than this value(unit: %)")
 )
 
 const (
@@ -200,6 +201,9 @@ func saveConfig(results []*speedtester.Result) error {
 			continue
 		}
 		if *minUploadSpeed > 0 && float64(result.UploadSpeed)/(1024*1024) < *minUploadSpeed {
+			continue
+		}
+		if result.PacketLoss > *maxPacketLoss {
 			continue
 		}
 		filteredResults = append(filteredResults, result)
