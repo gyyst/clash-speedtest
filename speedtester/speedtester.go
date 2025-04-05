@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -241,7 +242,6 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 			downloadResults <- st.testDownload(proxy, downloadChunkSize)
 		}()
 	}
-	wg.Wait()
 
 	uploadResults := make(chan *downloadResult, st.config.Concurrent)
 
@@ -300,7 +300,6 @@ type latencyResult struct {
 
 func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 	client := st.createClient(proxy)
-	latencies := make([]time.Duration, 0, 6)
 	failedPings := 0
 
 	latencyResults := make(chan time.Duration, 10)
@@ -310,7 +309,8 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			time.Sleep(50 * time.Millisecond)
+			// 随机休眠10-100毫秒
+			time.Sleep(time.Duration(rand.Intn(91)+10) * time.Millisecond)
 
 			start := time.Now()
 			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
@@ -330,7 +330,7 @@ func (st *SpeedTester) testLatency(proxy constant.Proxy) *latencyResult {
 	wg.Wait()
 	close(latencyResults)
 
-	latencies = make([]time.Duration, 0, len(latencyResults))
+	latencies := make([]time.Duration, 0, len(latencyResults))
 	for latency := range latencyResults {
 		latencies = append(latencies, latency)
 	}
