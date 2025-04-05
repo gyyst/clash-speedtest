@@ -5,432 +5,339 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
-// GenerateProxyLink 根据代理类型和配置生成对应的代理链接
+// GenerateProxyLink 主入口函数
 func GenerateProxyLink(proxyName string, proxyType string, proxyConfig map[string]any) (string, error) {
-	switch proxyType {
-	case "Vmess":
+	switch strings.ToLower(proxyType) {
+	case "vmess":
 		return generateVmessLink(proxyName, proxyConfig)
-	case "Vless":
+	case "vless":
 		return generateVlessLink(proxyName, proxyConfig)
-	case "Trojan":
+	case "trojan":
 		return generateTrojanLink(proxyName, proxyConfig)
-	case "Shadowsocks":
+	case "shadowsocks":
 		return generateShadowsocksLink(proxyName, proxyConfig)
-	case "Hysteria2":
+	case "hysteria2":
 		return generateHysteria2Link(proxyName, proxyConfig)
 	default:
-		// 对于不支持的类型，返回代理名称
 		return proxyName, nil
 	}
 }
 
-// generateVmessLink 生成vmess链接
+// ================== Vmess ==================
 func generateVmessLink(proxyName string, config map[string]any) (string, error) {
-	if config == nil {
-		return proxyName, fmt.Errorf("无法生成vmess链接：配置为空")
+	base := getBaseParams(config, "uuid")
+	if base == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	// 获取必要参数
-	server := getStringValue(config, "server")
-	port := getStringValue(config, "port")
-	uuid := getStringValue(config, "uuid")
-
-	if server == "" || port == "" || uuid == "" {
-		return proxyName, fmt.Errorf("无法生成vmess链接：缺少必要参数")
-	}
-
-	// 创建vmess链接所需的JSON结构
-	vmessConfig := map[string]interface{}{
+	vmess := map[string]any{
 		"v":    "2",
 		"ps":   proxyName,
-		"add":  server,
-		"port": port,
-		"id":   uuid,
-		"aid":  getStringValue(config, "alterId", "0"),
-		"scy":  getStringValue(config, "cipher", "auto"),
-		"net":  "tcp",
+		"add":  getString(config, "server"),
+		"port": getPort(config),
+		"id":   getString(config, "uuid"),
+		"aid":  getString(config, "alterId", "0"),
+		"scy":  getString(config, "cipher", "auto"),
+		"net":  getString(config, "network", "tcp"),
 		"type": "none",
-		"host": "",
-		"path": "",
 		"tls":  "none",
-		"sni":  "",
-		"alpn": "",
-		"fp":   "chrome",
 	}
 
-	// 处理网络类型
-	network := getStringValue(config, "network", "ws")
-	vmessConfig["net"] = network
-
-	// 处理路径
-	if network == "ws" {
-		vmessConfig["path"] = getStringValue(config, "ws-path", "/")
-		// 处理ws headers
-		if headers, ok := config["ws-headers"].(map[string]interface{}); ok {
-			if host, ok := headers["Host"].(string); ok && host != "" {
-				vmessConfig["host"] = host
-			}
-		} else if host := getStringValue(config, "host"); host != "" {
-			vmessConfig["host"] = host
-		}
-	} else if network == "http" {
-		vmessConfig["path"] = getStringValue(config, "http-path", "/")
-		vmessConfig["type"] = "http"
-		if host := getStringValue(config, "host"); host != "" {
-			vmessConfig["host"] = host
-		}
-	} else if network == "grpc" {
-		vmessConfig["path"] = getStringValue(config, "grpc-service-name", "")
-		if host := getStringValue(config, "host"); host != "" {
-			vmessConfig["host"] = host
-		}
+	// 处理传输类型
+	switch vmess["net"] {
+	case "ws":
+		handleWsConfig(config, vmess)
+	case "http":
+		handleHttpConfig(config, vmess)
+	case "grpc":
+		handleGrpcConfig(config, vmess)
 	}
 
-	// 处理TLS
-	if tls, ok := config["tls"].(bool); ok && tls {
-		vmessConfig["tls"] = "tls"
-		if sni := getStringValue(config, "servername"); sni != "" {
-			vmessConfig["sni"] = sni
-		} else if sni := getStringValue(config, "sni"); sni != "" {
-			vmessConfig["sni"] = sni
-		}
-
-		// 处理ALPN
-		if alpn, ok := config["alpn"].([]string); ok && len(alpn) > 0 {
-			vmessConfig["alpn"] = strings.Join(alpn, ",")
-		} else if alpnStr := getStringValue(config, "alpn"); alpnStr != "" {
-			vmessConfig["alpn"] = alpnStr
-		}
-
-		// 处理指纹
-		if fp := getStringValue(config, "client-fingerprint"); fp != "" {
-			vmessConfig["fp"] = fp
-		}
+	// TLS处理
+	if getBool(config, "tls") {
+		vmess["tls"] = "tls"
+		vmess["sni"] = getString(config, "servername", getString(config, "sni"))
+		vmess["alpn"] = strings.Join(getSlice(config, "alpn"), ",")
+		vmess["fp"] = getString(config, "client-fingerprint", "chrome")
 	}
 
-	// 转换为JSON
-	jsonData, err := json.Marshal(vmessConfig)
-	if err != nil {
-		return proxyName, fmt.Errorf("生成vmess链接失败：%v", err)
-	}
-
-	// Base64编码
-	base64Str := base64.StdEncoding.EncodeToString(jsonData)
-	return "vmess://" + base64Str, nil
+	jsonData, _ := json.Marshal(vmess)
+	return "vmess://" + base64.StdEncoding.EncodeToString(jsonData), nil
 }
 
-// generateVlessLink 生成vless链接
+// ================== Vless ==================
 func generateVlessLink(proxyName string, config map[string]any) (string, error) {
-	if config == nil {
-		return proxyName, fmt.Errorf("无法生成vless链接：配置为空")
+	base := getBaseParams(config, "uuid")
+	if base == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	// 获取必要参数
-	uuid := getStringValue(config, "uuid")
-	server := getStringValue(config, "server")
-	port := getStringValue(config, "port")
-
-	if server == "" || port == "" || uuid == "" {
-		return proxyName, fmt.Errorf("无法生成vless链接：缺少必要参数")
-	}
-
-	// 设置查询参数
 	params := url.Values{}
+	params.Set("type", getString(config, "network", "tcp"))
 
-	// 处理网络类型
-	network := getStringValue(config, "network", "tcp")
-	params.Set("type", network)
-
-	// 处理安全类型
-	if tls, ok := config["tls"].(bool); ok && tls {
-		params.Set("security", "tls")
-
-		// 处理SNI
-		if sni := getStringValue(config, "servername"); sni != "" {
-			params.Set("sni", sni)
-		} else if sni := getStringValue(config, "sni"); sni != "" {
-			params.Set("sni", sni)
-		}
-
-		// 处理指纹
-		if fp := getStringValue(config, "client-fingerprint"); fp != "" {
-			params.Set("fp", fp)
-		}
-
-		// 处理ALPN
-		if alpn, ok := config["alpn"].([]string); ok && len(alpn) > 0 {
-			params.Set("alpn", strings.Join(alpn, ","))
-		} else if alpnStr := getStringValue(config, "alpn"); alpnStr != "" {
-			params.Set("alpn", alpnStr)
-		}
-
-		// 处理Reality
-		if pbk := getStringValue(config, "public-key"); pbk != "" {
-			params.Set("pbk", pbk)
-			params.Set("security", "reality")
-		}
-
-		if sid := getStringValue(config, "short-id"); sid != "" {
-			params.Set("sid", sid)
-			params.Set("security", "reality")
-		}
+	// Flow参数
+	if flow := getString(config, "flow"); flow != "" {
+		params.Set("flow", flow)
 	}
 
-	// 处理路径
-	if network == "ws" {
-		if path := getStringValue(config, "ws-path"); path != "" {
-			params.Set("path", path)
-		} else if path := getStringValue(config, "path"); path != "" {
-			params.Set("path", path)
-		}
-	} else if network == "grpc" {
-		if svcName := getStringValue(config, "grpc-service-name"); svcName != "" {
-			params.Set("serviceName", svcName)
-		}
+	// TLS处理
+	handleTLSConfig(config, params)
+
+	// 传输类型处理
+	switch getString(config, "network") {
+	case "ws":
+		handleWsParams(config, params)
+	case "grpc":
+		handleGrpcParams(config, params)
 	}
 
-	// 处理Host
-	if host := getStringValue(config, "host"); host != "" {
-		params.Set("host", host)
-	} else if headers, ok := config["ws-headers"].(map[string]interface{}); ok {
-		if host, ok := headers["Host"].(string); ok && host != "" {
-			params.Set("host", host)
-		}
-	}
-
-	// 处理额外参数
-	if ed := getStringValue(config, "ed"); ed != "" {
-		params.Set("ed", ed)
-	}
-
-	// 构建URL
-	u := url.URL{
-		Scheme:   "vless",
-		User:     url.User(uuid),
-		Host:     server + ":" + port,
-		RawQuery: params.Encode(),
-		Fragment: proxyName,
-	}
-
-	return u.String(), nil
+	return buildURL("vless", base, proxyName, params), nil
 }
 
-// generateTrojanLink 生成trojan链接
+// ================== Trojan ==================
 func generateTrojanLink(proxyName string, config map[string]any) (string, error) {
-	if config == nil {
-		return proxyName, fmt.Errorf("无法生成trojan链接：配置为空")
+	base := getBaseParams(config, "password")
+	if base == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	// 获取必要参数
-	password := getStringValue(config, "password")
-	server := getStringValue(config, "server")
-	port := getStringValue(config, "port")
-
-	if server == "" || port == "" || password == "" {
-		return proxyName, fmt.Errorf("无法生成trojan链接：缺少必要参数")
-	}
-
-	// 设置查询参数
 	params := url.Values{}
-
-	// 处理SNI
-	if sni := getStringValue(config, "sni"); sni != "" {
-		params.Set("sni", sni)
-	} else if sni := getStringValue(config, "servername"); sni != "" {
+	if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
 		params.Set("sni", sni)
 	}
 
-	// 处理网络类型
-	if network := getStringValue(config, "network"); network != "" && network != "tcp" {
+	// 网络类型处理
+	switch network := getString(config, "network"); network {
+	case "ws", "grpc":
 		params.Set("type", network)
-
-		// 处理路径
-		if network == "ws" {
-			if path := getStringValue(config, "ws-path"); path != "" {
-				params.Set("path", path)
-			} else if path := getStringValue(config, "path"); path != "" {
-				params.Set("path", path)
-			}
-		} else if network == "grpc" {
-			if svcName := getStringValue(config, "grpc-service-name"); svcName != "" {
-				params.Set("serviceName", svcName)
-			}
-		}
+		handleTransportParams(config, network, params)
 	}
 
-	// 处理Host
-	if host := getStringValue(config, "host"); host != "" {
-		params.Set("host", host)
-	} else if headers, ok := config["ws-headers"].(map[string]interface{}); ok {
-		if host, ok := headers["Host"].(string); ok && host != "" {
-			params.Set("host", host)
-		}
-	}
-
-	// 处理指纹
-	if fp := getStringValue(config, "client-fingerprint"); fp != "" {
-		params.Set("fp", fp)
-	}
-
-	// 构建URL
-	u := url.URL{
-		Scheme:   "trojan",
-		User:     url.User(password),
-		Host:     server + ":" + port,
-		RawQuery: params.Encode(),
-		Fragment: proxyName,
-	}
-
-	return u.String(), nil
+	return buildURL("trojan", base, proxyName, params), nil
 }
 
-// generateShadowsocksLink 生成shadowsocks链接
+// ================== Shadowsocks ==================
 func generateShadowsocksLink(proxyName string, config map[string]any) (string, error) {
-	if config == nil {
-		return proxyName, fmt.Errorf("无法生成shadowsocks链接：配置为空")
+	cipher := getString(config, "cipher")
+	password := getString(config, "password")
+	server := getString(config, "server")
+	port := getPort(config)
+
+	if cipher == "" || password == "" || server == "" || port == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	// 获取必要参数
-	cipher := getStringValue(config, "cipher")
-	password := getStringValue(config, "password")
-	server := getStringValue(config, "server")
-	port := getStringValue(config, "port")
-
-	if server == "" || port == "" || password == "" || cipher == "" {
-		return proxyName, fmt.Errorf("无法生成shadowsocks链接：缺少必要参数")
-	}
-
-	// 构建userinfo部分
-	userInfo := fmt.Sprintf("%s:%s", cipher, password)
-	userInfoBase64 := base64.StdEncoding.EncodeToString([]byte(userInfo))
-
-	// 设置查询参数
+	userInfo := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cipher, password)))
 	params := url.Values{}
 
-	// 处理插件
-	if plugin := getStringValue(config, "plugin"); plugin != "" {
-		pluginOpts := getStringValue(config, "plugin-opts")
-		if pluginOpts != "" {
-			params.Set("plugin", plugin+";"+pluginOpts)
-		} else {
-			params.Set("plugin", plugin)
-		}
+	// 插件处理
+	if plugin := getString(config, "plugin"); plugin != "" {
+		pluginStr := handlePluginOpts(config, plugin)
+		params.Set("plugin", pluginStr)
 	}
 
-	// 构建URL
-	u := url.URL{
-		Scheme:   "ss",
-		User:     url.User(userInfoBase64),
-		Host:     server + ":" + port,
-		RawQuery: params.Encode(),
-		Fragment: proxyName,
-	}
-
-	return u.String(), nil
+	return buildURL("ss", userInfo+"@"+server+":"+port, proxyName, params), nil
 }
 
-// getStringValue 从配置中获取字符串值，如果不存在则返回默认值
-func getStringValue(config map[string]any, key string, defaultValue ...string) string {
-	if val, ok := config[key]; ok {
-		switch v := val.(type) {
-		case string:
-			return v
-		case int:
-			return fmt.Sprintf("%d", v)
-		case float64:
-			return fmt.Sprintf("%v", v)
-		case bool:
-			return fmt.Sprintf("%v", v)
-		default:
-			return fmt.Sprintf("%v", v)
-		}
+// ================== Hysteria2 ==================
+func generateHysteria2Link(proxyName string, config map[string]any) (string, error) {
+	base := getBaseParams(config, "password")
+	if base == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	if len(defaultValue) > 0 {
-		return defaultValue[0]
+	params := url.Values{}
+	if insecure := getBool(config, "skip-cert-verify"); insecure {
+		params.Set("insecure", "1")
+	}
+	if sni := getString(config, "sni"); sni != "" {
+		params.Set("sni", sni)
+	}
+
+	// 性能参数
+	if up := getString(config, "up"); up != "" {
+		params.Set("upmbps", up)
+	}
+	if down := getString(config, "down"); down != "" {
+		params.Set("downmbps", down)
+	}
+
+	return buildURL("hysteria2", base, proxyName, params), nil
+}
+
+// ================== Helper Functions ==================
+func getString(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := m[key]; ok {
+			switch v := val.(type) {
+			case string:
+				return v
+			case int:
+				return strconv.Itoa(v)
+			case float64:
+				return fmt.Sprintf("%.0f", v)
+			case bool:
+				return strconv.FormatBool(v)
+			}
+		}
 	}
 	return ""
 }
 
-// generateHysteria2Link 生成hysteria2链接
-func generateHysteria2Link(proxyName string, config map[string]any) (string, error) {
-	if config == nil {
-		return proxyName, fmt.Errorf("无法生成hysteria2链接：配置为空")
+func getBool(m map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if val, ok := m[key]; ok {
+			switch v := val.(type) {
+			case bool:
+				return v
+			case string:
+				return strings.EqualFold(v, "true")
+			case int:
+				return v > 0
+			}
+		}
 	}
+	return false
+}
 
-	// 获取必要参数
-	server := getStringValue(config, "server")
-	port := getStringValue(config, "port")
-	password := getStringValue(config, "password")
-
-	if server == "" || port == "" || password == "" {
-		return proxyName, fmt.Errorf("无法生成hysteria2链接：缺少必要参数")
+func getPort(config map[string]any) string {
+	if port := getString(config, "port"); port != "" {
+		return port
 	}
-
-	// 设置查询参数
-	params := url.Values{}
-
-	// 添加可选参数
-	if sni := getStringValue(config, "sni"); sni != "" {
-		params.Set("sni", sni)
-	} else if sni := getStringValue(config, "servername"); sni != "" {
-		params.Set("sni", sni)
+	if port, ok := config["port"].(int); ok {
+		return strconv.Itoa(port)
 	}
+	return ""
+}
 
-	// 处理跳过证书验证
-	if insecure, ok := config["skip-cert-verify"].(bool); ok && insecure {
-		params.Set("insecure", "1")
-	} else if insecure := getStringValue(config, "insecure"); insecure != "" {
-		params.Set("insecure", insecure)
+func getSlice(m map[string]any, key string) []string {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case []string:
+			return v
+		case []any:
+			var res []string
+			for _, item := range v {
+				res = append(res, fmt.Sprintf("%v", item))
+			}
+			return res
+		}
 	}
+	return nil
+}
 
-	// 处理混淆
-	if obfs := getStringValue(config, "obfs"); obfs != "" {
-		params.Set("obfs", obfs)
-		if obfsPassword := getStringValue(config, "obfs-password"); obfsPassword != "" {
-			params.Set("obfs-password", obfsPassword)
+func getBaseParams(config map[string]any, authKey string) string {
+	server := getString(config, "server")
+	port := getPort(config)
+	auth := getString(config, authKey)
+	if server == "" || port == "" || auth == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s@%s:%s", auth, server, port)
+}
+
+// ================== Config Handlers ==================
+func handleTLSConfig(config map[string]any, params url.Values) {
+	if getBool(config, "tls") {
+		params.Set("security", "tls")
+		if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
+			params.Set("sni", sni)
+		}
+		if fp := getString(config, "client-fingerprint"); fp != "" {
+			params.Set("fp", fp)
+		}
+		if alpn := getSlice(config, "alpn"); len(alpn) > 0 {
+			params.Set("alpn", strings.Join(alpn, ","))
 		}
 	}
 
-	// 处理指纹
-	if fp := getStringValue(config, "fingerprint"); fp != "" {
-		params.Set("fp", fp)
-	} else if fp := getStringValue(config, "client-fingerprint"); fp != "" {
-		params.Set("fp", fp)
+	// Reality协议处理
+	if pbk := getString(config, "public-key"); pbk != "" {
+		params.Set("security", "reality")
+		params.Set("pbk", pbk)
+		if sid := getString(config, "short-id"); sid != "" {
+			params.Set("sid", sid)
+		}
 	}
+}
 
-	// 处理ALPN
-	if alpn, ok := config["alpn"].([]string); ok && len(alpn) > 0 {
-		params.Set("alpn", strings.Join(alpn, ","))
-	} else if alpnStr := getStringValue(config, "alpn"); alpnStr != "" {
-		params.Set("alpn", alpnStr)
+func handleWsConfig(config map[string]any, vmess map[string]any) {
+	if opts, ok := config["ws-opts"].(map[string]any); ok {
+		vmess["path"] = getString(opts, "path", "/")
+		if headers, ok := opts["headers"].(map[string]any); ok {
+			vmess["host"] = getString(headers, "Host")
+		}
 	}
+}
 
-	// 处理多端口
-	if mport := getStringValue(config, "ports"); mport != "" {
-		params.Set("mport", mport)
+func handleHttpConfig(config map[string]any, vmess map[string]any) {
+	if opts, ok := config["http-opts"].(map[string]any); ok {
+		vmess["path"] = getString(opts, "path", "/")
+		if headers, ok := opts["headers"].(map[string]any); ok {
+			vmess["host"] = getString(headers, "Host")
+		}
 	}
+}
 
-	// 处理上下行速率
-	if up := getStringValue(config, "up"); up != "" {
-		params.Set("upmbps", up)
+func handleGrpcConfig(config map[string]any, vmess map[string]any) {
+	if opts, ok := config["grpc-opts"].(map[string]any); ok {
+		vmess["path"] = getString(opts, "grpc-service-name")
 	}
+}
 
-	if down := getStringValue(config, "down"); down != "" {
-		params.Set("downmbps", down)
+func handleWsParams(config map[string]any, params url.Values) {
+	if opts, ok := config["ws-opts"].(map[string]any); ok {
+		if path := getString(opts, "path"); path != "" {
+			params.Set("path", path)
+		}
+		if headers, ok := opts["headers"].(map[string]any); ok {
+			if host := getString(headers, "Host"); host != "" {
+				params.Set("host", host)
+			}
+		}
 	}
+}
 
-	// 构建URL
-	u := url.URL{
-		Scheme:   "hysteria2",
-		User:     url.User(password),
-		Host:     server + ":" + port,
-		RawQuery: params.Encode(),
-		Fragment: proxyName,
+func handleGrpcParams(config map[string]any, params url.Values) {
+	if opts, ok := config["grpc-opts"].(map[string]any); ok {
+		if service := getString(opts, "grpc-service-name"); service != "" {
+			params.Set("serviceName", service)
+		}
 	}
+}
 
-	return u.String(), nil
+func handleTransportParams(config map[string]any, network string, params url.Values) {
+	optsKey := network + "-opts"
+	if opts, ok := config[optsKey].(map[string]any); ok {
+		switch network {
+		case "ws":
+			if path := getString(opts, "path"); path != "" {
+				params.Set("path", path)
+			}
+		case "grpc":
+			if service := getString(opts, "grpc-service-name"); service != "" {
+				params.Set("serviceName", service)
+			}
+		}
+	}
+}
+
+func handlePluginOpts(config map[string]any, plugin string) string {
+	if opts, ok := config["plugin-opts"].(map[string]any); ok {
+		var parts []string
+		for k, v := range opts {
+			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+		}
+		return fmt.Sprintf("%s;%s", plugin, strings.Join(parts, ";"))
+	}
+	return plugin
+}
+
+func buildURL(scheme string, auth string, fragment string, params url.Values) string {
+	encodedFragment := url.PathEscape(fragment)
+	return fmt.Sprintf("%s://%s?%s#%s", scheme, auth, params.Encode(), encodedFragment)
 }
