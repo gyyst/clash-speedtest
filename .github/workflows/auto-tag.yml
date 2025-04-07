@@ -7,6 +7,7 @@ on:
       - main
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
     # tags:
     #   - '*'
 
@@ -35,17 +36,11 @@ jobs:
         id: bump_version
         run: |
           latest_version=${LATEST_TAG#v}
-          IFS='.' read -r major minor patch <<< "${latest_version%%-*}"
-          new_patch=$((patch + 1))
-          # Check if previous version was a beta version
-          if [[ "$latest_version" == *-beta* ]]; then
-            beta_num=$(echo "$latest_version" | sed -E 's/.*-beta\.([0-9]+)/\1/')
-            new_beta_num=$((beta_num + 1))
-            new_version="v$major.$minor.$new_patch-beta.$new_beta_num"
-          else
-            new_version="v$major.$minor.$new_patch-beta.1"
-          fi
+          IFS='.' read -r major minor patch <<< "$latest_version"
+          new_patch=$((patch+1))
           
+          new_version="v$major.$minor.$new_patch"
+
           echo "New version: $new_version"
           
           git config --local user.email "action@github.com"
