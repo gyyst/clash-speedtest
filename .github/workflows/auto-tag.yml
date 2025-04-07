@@ -35,7 +35,7 @@ jobs:
         id: bump_version
         run: |
           latest_version=${LATEST_TAG#v}
-          IFS='.' read -r major minor patch <<< "${latest_version%%}"
+          IFS='.' read -r major minor patch <<< "${latest_version%%-*}"
           new_patch=$((patch + 1))
           # Check if previous version was a beta version
           if [[ "$latest_version" == *-beta* ]]; then
