@@ -304,7 +304,7 @@ func GetLocationWithRisk(client *http.Client, debugMode bool, enableRisk bool) (
 
 	// 创建一个新的客户端用于风险值请求
 	riskClient := &http.Client{
-		Timeout:   5 * time.Second,
+		Timeout:   10 * time.Second,
 		Transport: client.Transport,
 	}
 

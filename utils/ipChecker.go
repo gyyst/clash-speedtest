@@ -34,7 +34,7 @@ func (ic *IPChecker) FetchScamalytics(ip string) (string, error) {
 
 	initialResp, err := ic.Client.Do(req)
 	if err != nil {
-		fmt.Printf("Error fetching Ping0 risk (initial request): %s\n", err)
+		fmt.Printf("Error fetching Scamalytics risk (initial request): %s\n", err)
 		return "", err
 	}
 	defer initialResp.Body.Close()

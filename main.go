@@ -299,7 +299,7 @@ func printResults(results []*speedtester.Result) {
 			} else if strings.Contains(riskInfoStr, "一般") || strings.Contains(riskInfoStr, "中危") {
 				riskInfoStr = colorYellow + riskInfoStr + colorReset
 			} else {
-				riskInfoStr = colorYellow + riskInfoStr + colorReset
+				riskInfoStr = colorGreen + riskInfoStr + colorReset
 			}
 		} else {
 			riskInfoStr = colorGreen + riskInfoStr + colorReset
@@ -397,10 +397,10 @@ func saveConfig(results []*speedtester.Result) error {
 				newName += " " + result.IpInfoResult.RiskInfo
 			}
 			// 添加地区信息
-			if result.IpInfoResult.Region != "" {
+			if result.IpInfoResult.Region != "" && result.IpInfoResult.Region != "N/A" {
 				newName += " " + result.IpInfoResult.Region
 			}
-			if result.IpInfoResult.City != "" {
+			if result.IpInfoResult.City != "" && result.IpInfoResult.City != "N/A" {
 				newName += " " + result.IpInfoResult.City
 			}
 

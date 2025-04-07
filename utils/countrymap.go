@@ -399,6 +399,7 @@ var CountryCodeMap = map[string]string{
 	"YE": "也门",
 	"ZM": "赞比亚",
 	"ZW": "津巴布韦",
+	"HK": "香港",
 }
 
 // GetChineseCountryName 获取国家的中文名称
