@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/faceair/clash-speedtest/unlock"
 	"github.com/metacubex/mihomo/adapter"
 	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/constant"
@@ -36,6 +37,8 @@ type Config struct {
 	Timeout        time.Duration
 	Concurrent     int
 	TestConcurrent int
+	UnlockTest     string
+	Fast           bool
 }
 
 type SpeedTester struct {
@@ -188,18 +191,36 @@ type testJob struct {
 }
 
 type Result struct {
-	ProxyName     string         `json:"proxy_name"`
-	ProxyType     string         `json:"proxy_type"`
-	ProxyConfig   map[string]any `json:"proxy_config"`
-	Latency       time.Duration  `json:"latency"`
-	Jitter        time.Duration  `json:"jitter"`
-	PacketLoss    float64        `json:"packet_loss"`
-	DownloadSize  float64        `json:"download_size"`
-	DownloadTime  time.Duration  `json:"download_time"`
-	DownloadSpeed float64        `json:"download_speed"`
-	UploadSize    float64        `json:"upload_size"`
-	UploadTime    time.Duration  `json:"upload_time"`
-	UploadSpeed   float64        `json:"upload_speed"`
+	ProxyName     string                   `json:"proxy_name"`
+	ProxyType     string                   `json:"proxy_type"`
+	ProxyConfig   map[string]any           `json:"proxy_config"`
+	Latency       time.Duration            `json:"latency"`
+	Jitter        time.Duration            `json:"jitter"`
+	PacketLoss    float64                  `json:"packet_loss"`
+	DownloadSize  float64                  `json:"download_size"`
+	DownloadTime  time.Duration            `json:"download_time"`
+	DownloadSpeed float64                  `json:"download_speed"`
+	UploadSize    float64                  `json:"upload_size"`
+	UploadTime    time.Duration            `json:"upload_time"`
+	UploadSpeed   float64                  `json:"upload_speed"`
+	UnlockResults map[string]*UnlockResult `json:"unlock_results,omitempty"`
+	IpInfoResult  IpInfo                   `json:"ip_info,omitempty"`
+}
+
+type UnlockResult struct {
+	Platform string `json:"platform"`
+	Status   string `json:"status"`
+	Region   string `json:"region,omitempty"`
+	Info     string `json:"info,omitempty"`
+}
+
+type IpInfo struct {
+	Ip          string `json:"ip"`
+	Country     string `json:"country"`
+	CountryFlag string `json:"flag"`
+	Region      string `json:"region,omitempty"`
+	City        string `json:"city,omitempty"`
+	RiskInfo    string `json:"risk_info,omitempty"`
 }
 
 func (r *Result) FormatDownloadSpeed() string {
@@ -252,13 +273,88 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	result.Jitter = latencyResult.jitter
 	result.PacketLoss = latencyResult.packetLoss
 
-	// 如果延迟测试完全失败，直接返回
+	// 如果延迟测试完全失败，直接返回，cnip被墙的话返回100%
 	if result.PacketLoss >= 50 {
 		return result
 	}
 
-	// 2. 并发进行下载和上传测试
+	// 2-3. 并发进行流媒体解锁测试和IP信息获取
 	var wg sync.WaitGroup
+
+	// 初始化解锁结果映射
+	if st.config.UnlockTest != "" {
+		result.UnlockResults = make(map[string]*UnlockResult)
+	}
+
+	// 创建通道用于接收流媒体解锁测试结果
+	unlockResultChan := make(chan map[string]*unlock.StreamResult, 1)
+	// 创建通道用于接收IP信息获取结果
+	ipInfoResultChan := make(chan *unlock.IpInfo, 1)
+
+	// 启动流媒体解锁测试
+	if st.config.UnlockTest != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// 创建HTTP客户端用于解锁测试
+			client := st.createClient(proxy)
+			// 获取流媒体测试结果
+			streamResults := unlock.GetStreamResults(client, st.config.UnlockTest, 50, false)
+			unlockResultChan <- streamResults
+		}()
+	}
+
+	// 启动IP信息获取
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ipInfoResult, err := unlock.GetLocationWithRisk(st.createClient(proxy), false, true)
+		if err == nil && ipInfoResult != nil {
+			ipInfoResultChan <- ipInfoResult
+		} else {
+			ipInfoResultChan <- &unlock.IpInfo{}
+		}
+	}()
+
+	// 等待所有并发任务完成
+	wg.Wait()
+
+	// 关闭通道
+	if st.config.UnlockTest != "" {
+		close(unlockResultChan)
+	}
+	close(ipInfoResultChan)
+
+	// 处理流媒体解锁测试结果
+	if st.config.UnlockTest != "" {
+		streamResults := <-unlockResultChan
+		for platform, streamResult := range streamResults {
+			result.UnlockResults[platform] = &UnlockResult{
+				Platform: streamResult.Platform,
+				Status:   streamResult.Status,
+				Region:   streamResult.Region,
+				Info:     streamResult.Info,
+			}
+		}
+	}
+
+	// 处理IP信息获取结果
+	ipInfoResult := <-ipInfoResultChan
+	result.IpInfoResult = IpInfo{
+		Ip:          ipInfoResult.Ip,
+		Country:     ipInfoResult.Country,
+		CountryFlag: ipInfoResult.CountryFlag,
+		Region:      ipInfoResult.Region,
+		City:        ipInfoResult.City,
+		RiskInfo:    ipInfoResult.RiskInfo,
+	}
+	// 如果是Fast模式，跳过下载和上传测试
+	if st.config.Fast {
+		return result
+	}
+
+	// 4. 并发进行下载和上传测试
+	// var wg sync.WaitGroup
 	downloadResults := make(chan *downloadResult, st.config.Concurrent)
 
 	// 计算每个并发连接的数据大小
@@ -286,7 +382,7 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	}
 	wg.Wait()
 
-	// 3. 汇总结果
+	// 5. 汇总结果
 	var totalDownloadBytes, totalUploadBytes int64
 	var totalDownloadTime, totalUploadTime time.Duration
 	var downloadCount, uploadCount int
@@ -357,7 +453,6 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			}
 		}()
 	}
-	fmt.Println(checkCNNetwork(proxy))
 	//测试server的中国连通性
 	if !checkCNNetwork(proxy) {
 		failedPings = 10

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/faceair/clash-speedtest/utils"
+
 	"github.com/faceair/clash-speedtest/proxylink"
 	"github.com/faceair/clash-speedtest/speedtester"
 	"github.com/metacubex/mihomo/log"
@@ -27,10 +29,13 @@ var (
 	testConcurrent    = flag.Int("test-concurrent", 2, "test proxies concurrent size")
 	outputPath        = flag.String("output", "result.txt", "output config file path")
 	maxLatency        = flag.Duration("max-latency", 800*time.Millisecond, "filter latency greater than this value")
-	minSpeed          = flag.Float64("min-speed", 5, "filter speed less than this value(unit: MB/s)")
+	minDownloadSpeed  = flag.Float64("min-download-speed", 5, "filter speed less than this value(unit: MB/s)")
 	minUploadSpeed    = flag.Float64("min-upload-speed", 0, "filter upload speed less than this value(unit: MB/s)")
 	maxPacketLoss     = flag.Float64("max-packet-loss", 0, "filter packet loss greater than this value(unit: %)")
 	limit             = flag.Int("limit", 0, "limit the number of proxies in output file, 0 means no limit")
+	unlockTest        = flag.String("unlock", "", "test streaming media unlock, support: netflix|chatgpt|disney|youtube|all")
+	fastMode          = flag.Bool("fast", false, "only test latency, skip download and upload speed test")
+	sortFields        = flag.String("sort", "", "sort proxies by fields, support: latency|jitter|packet_loss|download|upload, multiple fields separated by comma, e.g. download,upload")
 )
 
 const (
@@ -57,6 +62,8 @@ func main() {
 		Timeout:        *timeout,
 		Concurrent:     *concurrent,
 		TestConcurrent: *testConcurrent,
+		UnlockTest:     *unlockTest,
+		Fast:           *fastMode,
 	})
 
 	allProxies, err := speedTester.LoadProxies()
@@ -72,9 +79,96 @@ func main() {
 		results = append(results, result)
 	})
 
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].DownloadSpeed > results[j].DownloadSpeed
-	})
+	// 根据用户指定的字段或默认规则进行排序
+	if *sortFields != "" {
+		// 解析用户指定的排序字段
+		fields := strings.Split(*sortFields, "|")
+		sort.Slice(results, func(i, j int) bool {
+			// 依次比较每个字段
+			for _, field := range fields {
+				field = strings.TrimSpace(field)
+				switch field {
+				case "latency":
+					// 处理延迟为0（N/A）的情况
+					if results[i].Latency == 0 && results[j].Latency > 0 {
+						// 如果i的延迟为0（N/A），而j有有效延迟，则j应该排在前面
+						return false
+					}
+					if results[i].Latency > 0 && results[j].Latency == 0 {
+						// 如果i有有效延迟，而j的延迟为0（N/A），则i应该排在前面
+						return true
+					}
+					// 如果两者都有有效延迟或都为N/A，则按延迟值排序（延迟越低越好）
+					if results[i].Latency != results[j].Latency {
+						return results[i].Latency < results[j].Latency
+					}
+				case "jitter":
+					// 抖动越低越好，所以是小于号
+					if results[i].Jitter != results[j].Jitter {
+						return results[i].Jitter < results[j].Jitter
+					}
+				case "packet_loss":
+					// 丢包率越低越好，所以是小于号
+					if results[i].PacketLoss != results[j].PacketLoss {
+						return results[i].PacketLoss < results[j].PacketLoss
+					}
+				case "download":
+					// 下载速度越高越好，所以是大于号
+					if results[i].DownloadSpeed != results[j].DownloadSpeed {
+						return results[i].DownloadSpeed > results[j].DownloadSpeed
+					}
+				case "upload":
+					// 上传速度越高越好，所以是大于号
+					if results[i].UploadSpeed != results[j].UploadSpeed {
+						return results[i].UploadSpeed > results[j].UploadSpeed
+					}
+				}
+			}
+			// 如果所有指定字段都相等，则按名称排序
+			return results[i].ProxyName < results[j].ProxyName
+		})
+	} else if *fastMode {
+		// 在Fast模式下按延迟排序
+		sort.Slice(results, func(i, j int) bool {
+			// 处理延迟为0（N/A）的情况
+			if results[i].Latency == 0 && results[j].Latency > 0 {
+				// 如果i的延迟为0（N/A），而j有有效延迟，则j应该排在前面
+				return false
+			}
+			if results[i].Latency > 0 && results[j].Latency == 0 {
+				// 如果i有有效延迟，而j的延迟为0（N/A），则i应该排在前面
+				return true
+			}
+			// 如果两者都有有效延迟或都为N/A，则按延迟值排序（延迟越低越好）
+			return results[i].Latency < results[j].Latency
+		})
+	} else {
+		// 默认按下载速度排序
+		sort.Slice(results, func(i, j int) bool {
+			// 如果下载速度不同，按下载速度排序（下载速度越高越好）
+			if results[i].DownloadSpeed != results[j].DownloadSpeed {
+				return results[i].DownloadSpeed > results[j].DownloadSpeed
+			}
+
+			// 如果下载速度相同，处理延迟为0（N/A）的情况
+			if results[i].Latency == 0 && results[j].Latency > 0 {
+				// 如果i的延迟为0（N/A），而j有有效延迟，则j应该排在前面
+				return false
+			}
+			if results[i].Latency > 0 && results[j].Latency == 0 {
+				// 如果i有有效延迟，而j的延迟为0（N/A），则i应该排在前面
+				return true
+			}
+
+			// 如果两者都有有效延迟或都为N/A，则按延迟值排序（延迟越低越好）
+			if results[i].Latency != results[j].Latency {
+				return results[i].Latency < results[j].Latency
+			}
+
+			// 如果延迟也相同，按名称排序
+			return results[i].ProxyName < results[j].ProxyName
+		})
+	}
 
 	printResults(results)
 
@@ -90,16 +184,36 @@ func main() {
 func printResults(results []*speedtester.Result) {
 	table := tablewriter.NewWriter(os.Stdout)
 
-	table.SetHeader([]string{
+	// 准备表头
+	headers := []string{
 		"序号",
 		"节点名称",
 		"类型",
 		"延迟",
 		"抖动",
 		"丢包率",
-		"下载速度",
-		"上传速度",
-	})
+		"风险值",
+	}
+
+	// 如果不是Fast模式，添加速度相关列
+	if !*fastMode {
+		headers = append(headers, "下载速度", "上传速度")
+	}
+
+	// 检查是否有解锁测试结果，如果有，添加解锁测试结果列
+	hasUnlockResults := false
+	for _, result := range results {
+		if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
+			hasUnlockResults = true
+			break
+		}
+	}
+
+	if hasUnlockResults {
+		headers = append(headers, "解锁测试")
+	}
+
+	table.SetHeader(headers)
 
 	table.SetAutoWrapText(false)
 	table.SetAutoFormatHeaders(true)
@@ -175,6 +289,22 @@ func printResults(results []*speedtester.Result) {
 			uploadSpeedStr = colorRed + uploadSpeedStr + colorReset
 		}
 
+		// 风险值颜色
+		riskInfoStr := "N/A"
+		if result.IpInfoResult.RiskInfo != "" {
+			riskInfoStr = result.IpInfoResult.RiskInfo
+			// 根据风险信息内容设置颜色
+			if strings.Contains(riskInfoStr, "较差") || strings.Contains(riskInfoStr, "高危") {
+				riskInfoStr = colorRed + riskInfoStr + colorReset
+			} else if strings.Contains(riskInfoStr, "一般") || strings.Contains(riskInfoStr, "中危") {
+				riskInfoStr = colorYellow + riskInfoStr + colorReset
+			} else {
+				riskInfoStr = colorYellow + riskInfoStr + colorReset
+			}
+		} else {
+			riskInfoStr = colorGreen + riskInfoStr + colorReset
+		}
+
 		row := []string{
 			idStr,
 			result.ProxyName,
@@ -182,8 +312,33 @@ func printResults(results []*speedtester.Result) {
 			latencyStr,
 			jitterStr,
 			packetLossStr,
-			downloadSpeedStr,
-			uploadSpeedStr,
+			riskInfoStr,
+		}
+
+		// 如果不是Fast模式，添加速度相关列
+		if !*fastMode {
+			row = append(row, downloadSpeedStr, uploadSpeedStr)
+		}
+
+		// 如果有解锁测试结果，添加解锁测试结果列
+		if hasUnlockResults {
+			unlockStr := ""
+			if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
+				unlockResults := make([]string, 0)
+				for platform, unlockResult := range result.UnlockResults {
+					if unlockResult.Status == "Success" {
+						regionInfo := ""
+						if unlockResult.Region != "" {
+							regionInfo = "(" + unlockResult.Region + ")"
+						}
+						unlockResults = append(unlockResults, colorGreen+platform+regionInfo+colorReset)
+					} else {
+						unlockResults = append(unlockResults, colorRed+platform+colorReset)
+					}
+				}
+				unlockStr = strings.Join(unlockResults, ", ")
+			}
+			row = append(row, unlockStr)
 		}
 
 		table.Append(row)
@@ -200,11 +355,14 @@ func saveConfig(results []*speedtester.Result) error {
 		if *maxLatency > 0 && result.Latency > *maxLatency {
 			continue
 		}
-		if *minSpeed > 0 && float64(result.DownloadSpeed)/(1024*1024) < *minSpeed {
-			continue
-		}
-		if *minUploadSpeed > 0 && float64(result.UploadSpeed)/(1024*1024) < *minUploadSpeed {
-			continue
+		// 在Fast模式下不根据速度过滤
+		if !*fastMode {
+			if *minDownloadSpeed > 0 && float64(result.DownloadSpeed)/(1024*1024) < *minDownloadSpeed {
+				continue
+			}
+			if *minUploadSpeed > 0 && float64(result.UploadSpeed)/(1024*1024) < *minUploadSpeed {
+				continue
+			}
 		}
 		if result.PacketLoss > *maxPacketLoss {
 			continue
@@ -220,11 +378,59 @@ func saveConfig(results []*speedtester.Result) error {
 	// 创建文本内容，每行一个代理链接
 	lines := make([]string, 0, len(filteredResults))
 	for _, result := range filteredResults {
-		// 生成代理链接
-		link, err := proxylink.GenerateProxyLink(result.ProxyName, result.ProxyType, result.ProxyConfig)
+		// 构建新的节点名称格式
+		originalName := result.ProxyName
+		newName := ""
+
+		// 添加国旗和国家信息
+		if result.IpInfoResult.Country != "" {
+			// 添加国旗
+			if result.IpInfoResult.CountryFlag != "" {
+				newName += result.IpInfoResult.CountryFlag
+			}
+			// 添加中文国家名称
+			if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
+				newName += chineseName
+			}
+			// 添加风险信息
+			if result.IpInfoResult.RiskInfo != "" {
+				newName += " " + result.IpInfoResult.RiskInfo
+			}
+			// 添加地区信息
+			if result.IpInfoResult.Region != "" {
+				newName += " " + result.IpInfoResult.Region
+			}
+			if result.IpInfoResult.City != "" {
+				newName += " " + result.IpInfoResult.City
+			}
+
+		} else {
+			// 如果没有国家信息，使用原始名称
+			newName = originalName
+		}
+
+		// 添加流媒体解锁信息
+		if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
+			unlockResults := make([]string, 0)
+			for platform, unlockResult := range result.UnlockResults {
+				if unlockResult.Status == "Success" {
+					regionInfo := ""
+					if unlockResult.Region != "" {
+						regionInfo = "(" + unlockResult.Region + ")"
+					}
+					unlockResults = append(unlockResults, platform+regionInfo)
+				}
+			}
+
+			if len(unlockResults) > 0 {
+				newName += " [" + strings.Join(unlockResults, "| ") + "]"
+			}
+		}
+		proxyName := newName
+		link, err := proxylink.GenerateProxyLink(proxyName, result.ProxyType, result.ProxyConfig)
 		if err != nil {
 			// 如果生成链接失败，使用代理名称
-			link = result.ProxyName
+			link = proxyName
 		} else {
 			// 对URL进行解码处理
 			decodedLink, err := url.QueryUnescape(link)
