@@ -377,6 +377,7 @@ func saveConfig(results []*speedtester.Result) error {
 
 	// 创建文本内容，每行一个代理链接
 	lines := make([]string, 0, len(filteredResults))
+	countryCount := make(map[string]int)
 	for _, result := range filteredResults {
 		// 构建新的节点名称格式
 		originalName := result.ProxyName
@@ -390,7 +391,11 @@ func saveConfig(results []*speedtester.Result) error {
 			}
 			// 添加中文国家名称
 			if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
+				countryCount[chineseName]++
 				newName += chineseName
+				if countryCount[chineseName] > 1 {
+					newName += fmt.Sprintf(" %d", countryCount[chineseName])
+				}
 			}
 			// 添加风险信息
 			if result.IpInfoResult.RiskInfo != "" {
@@ -403,7 +408,6 @@ func saveConfig(results []*speedtester.Result) error {
 			if result.IpInfoResult.City != "" && result.IpInfoResult.City != "N/A" {
 				newName += " " + result.IpInfoResult.City
 			}
-
 		} else {
 			// 如果没有国家信息，使用原始名称
 			newName = originalName
