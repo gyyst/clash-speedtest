@@ -22,6 +22,7 @@ func (r *ZeroReader) Read(p []byte) (n int, err error) {
 	if r.remainBytes <= 0 {
 		return 0, io.EOF
 	}
+	
 	toRead := int64(len(p))
 	if toRead > r.remainBytes {
 		toRead = r.remainBytes
