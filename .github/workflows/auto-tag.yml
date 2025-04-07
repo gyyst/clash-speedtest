@@ -3,12 +3,12 @@ name: Auto Tag and Release
 on:
   push:
     branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - '.github/workflows/**'
-    tags:
-      - '*'
+      - dev
+    # paths-ignore:
+    #   - '**.md'
+    #   - '.github/workflows/**'
+    # tags:
+    #   - '*'
 
 permissions:
   contents: write
