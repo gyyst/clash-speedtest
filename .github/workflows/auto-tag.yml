@@ -35,7 +35,7 @@ jobs:
         id: bump_version
         run: |
           latest_version=${LATEST_TAG#v}
-          IFS='.' read -r major minor patchb <<< "$latest_version"
+          IFS='.' read -r major minor patchb beta_num <<< "$latest_version"
           
           IFS=＇-＇ read -r patch beta <<< ＂$patchb＂
           new_patch=$((patch+1))
