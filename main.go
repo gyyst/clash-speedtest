@@ -35,7 +35,7 @@ var (
 	limit             = flag.Int("limit", 0, "limit the number of proxies in output file, 0 means no limit")
 	unlockTest        = flag.String("unlock", "", "test streaming media unlock, support: netflix|chatgpt|disney|youtube|all")
 	fastMode          = flag.Bool("fast", false, "only test latency, skip download and upload speed test")
-	sortFields        = flag.String("sort", "", "sort proxies by fields, support: latency|jitter|packet_loss|download|upload, multiple fields separated by comma, e.g. download,upload")
+	sortFields        = flag.String("sort", "weighted", "sort proxies by fields, support: latency|jitter|packet_loss|download|upload|weighted, multiple fields separated by comma, e.g. download,upload")
 )
 
 const (
@@ -44,6 +44,145 @@ const (
 	colorYellow = "\033[33m"
 	colorReset  = "\033[0m"
 )
+
+// 计算节点的加权得分
+// 返回一个综合得分，得分越低表示性能越好
+func calculateWeightedScore(results []*speedtester.Result, index int) float64 {
+	// 根据是否为Fast模式定义不同的权重
+	var (
+		latencyWeight    float64
+		jitterWeight     float64
+		packetLossWeight float64
+		downloadWeight   float64
+		uploadWeight     float64
+	)
+
+	if *fastMode {
+		// Fast模式下只考虑延迟、抖动和丢包率
+		latencyWeight = 0.60    // 延迟权重
+		jitterWeight = 0.20     // 抖动权重
+		packetLossWeight = 0.20 // 丢包率权重
+		downloadWeight = 0      // 下载速度权重
+		uploadWeight = 0        // 上传速度权重
+	} else {
+		// 正常模式下考虑所有指标
+		latencyWeight = 0.30    // 延迟权重
+		jitterWeight = 0.15     // 抖动权重
+		packetLossWeight = 0.15 // 丢包率权重
+		downloadWeight = 0.30   // 下载速度权重
+		uploadWeight = 0.10     // 上传速度权重
+	}
+
+	// 创建各项指标的排名映射
+	latencyRanks := make(map[int]int)
+	jitterRanks := make(map[int]int)
+	packetLossRanks := make(map[int]int)
+	downloadRanks := make(map[int]int)
+	uploadRanks := make(map[int]int)
+
+	// 计算延迟排名（值越小排名越高）
+	validLatencies := make([]struct{ idx, val int }, 0)
+	for i, r := range results {
+		if r.Latency > 0 { // 只考虑有效延迟
+			validLatencies = append(validLatencies, struct{ idx, val int }{i, int(r.Latency)})
+		}
+	}
+	sort.Slice(validLatencies, func(i, j int) bool {
+		return validLatencies[i].val < validLatencies[j].val
+	})
+	for rank, item := range validLatencies {
+		latencyRanks[item.idx] = rank + 1
+	}
+	// 无效延迟的节点排在最后
+	for i := range results {
+		if _, exists := latencyRanks[i]; !exists {
+			latencyRanks[i] = len(validLatencies) + 1
+		}
+	}
+
+	// 计算抖动排名（值越小排名越高）
+	validJitters := make([]struct{ idx, val int }, 0)
+	for i, r := range results {
+		if r.Jitter > 0 { // 只考虑有效抖动
+			validJitters = append(validJitters, struct{ idx, val int }{i, int(r.Jitter)})
+		}
+	}
+	sort.Slice(validJitters, func(i, j int) bool {
+		return validJitters[i].val < validJitters[j].val
+	})
+	for rank, item := range validJitters {
+		jitterRanks[item.idx] = rank + 1
+	}
+	// 无效抖动的节点排在最后
+	for i := range results {
+		if _, exists := jitterRanks[i]; !exists {
+			jitterRanks[i] = len(validJitters) + 1
+		}
+	}
+
+	// 计算丢包率排名（值越小排名越高）
+	packetLossItems := make([]struct {
+		idx int
+		val float64
+	}, 0)
+	for i, r := range results {
+		packetLossItems = append(packetLossItems, struct {
+			idx int
+			val float64
+		}{i, r.PacketLoss})
+	}
+	sort.Slice(packetLossItems, func(i, j int) bool {
+		return packetLossItems[i].val < packetLossItems[j].val
+	})
+	for rank, item := range packetLossItems {
+		packetLossRanks[item.idx] = rank + 1
+	}
+
+	// 计算下载速度排名（值越大排名越高）
+	downloadItems := make([]struct {
+		idx int
+		val float64
+	}, 0)
+	for i, r := range results {
+		downloadItems = append(downloadItems, struct {
+			idx int
+			val float64
+		}{i, r.DownloadSpeed})
+	}
+	sort.Slice(downloadItems, func(i, j int) bool {
+		return downloadItems[i].val > downloadItems[j].val // 注意这里是降序排列
+	})
+	for rank, item := range downloadItems {
+		downloadRanks[item.idx] = rank + 1
+	}
+
+	// 计算上传速度排名（值越大排名越高）
+	uploadItems := make([]struct {
+		idx int
+		val float64
+	}, 0)
+	for i, r := range results {
+		uploadItems = append(uploadItems, struct {
+			idx int
+			val float64
+		}{i, r.UploadSpeed})
+	}
+	sort.Slice(uploadItems, func(i, j int) bool {
+		return uploadItems[i].val > uploadItems[j].val // 注意这里是降序排列
+	})
+	for rank, item := range uploadItems {
+		uploadRanks[item.idx] = rank + 1
+	}
+
+	// 计算加权得分（排名越低得分越好）
+	totalScore := float64(latencyRanks[index])*latencyWeight +
+		float64(jitterRanks[index])*jitterWeight +
+		float64(packetLossRanks[index])*packetLossWeight +
+		float64(downloadRanks[index])*downloadWeight +
+		float64(uploadRanks[index])*uploadWeight
+
+	return totalScore
+}
 
 func main() {
 	flag.Parse()
@@ -121,6 +260,16 @@ func main() {
 					// 上传速度越高越好，所以是大于号
 					if results[i].UploadSpeed != results[j].UploadSpeed {
 						return results[i].UploadSpeed > results[j].UploadSpeed
+					}
+				case "weighted":
+					// 加权排序，综合考虑各项指标
+					// 计算节点i的加权得分
+					scoreI := calculateWeightedScore(results, i)
+					// 计算节点j的加权得分
+					scoreJ := calculateWeightedScore(results, j)
+					// 得分越低越好
+					if scoreI != scoreJ {
+						return scoreI < scoreJ
 					}
 				}
 			}

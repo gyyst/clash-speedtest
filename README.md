@@ -61,7 +61,13 @@ limit the number of proxies in output file, 0 means no limit (default 0)
 -unlock string
 test streaming media unlock, support: netflix|chatgpt|disney|youtube|...|all (default:null)
 -sort string
-sort proxies by fields, support: latency|jitter|packet_loss|download|upload, multiple fields separated by | (default "")
+sort proxies by fields, support: latency|jitter|packet_loss|download|upload|weighted, multiple fields separated by | (default "weighted")
+  - latency: 按延迟排序，延迟越低越好
+  - jitter: 按抖动排序，抖动越低越好
+  - packet_loss: 按丢包率排序，丢包率越低越好
+  - download: 按下载速度排序，下载速度越高越好
+  - upload: 按上传速度排序，上传速度越高越好
+  - weighted: 按加权得分排序，综合考虑上述所有指标
 ```
 
 
@@ -121,11 +127,21 @@ hysteria2://oejdsadsaMk4AsD4@x.x.x.92:4376?insecure=1&sni=bing.com#🇺🇸美�
 vless://8adsab-dds9-40cf-802e-70adsa2@14.211.134.145:8080?host=JP.xxxxx.xxxxx.oRg.&path=/?ed=2048&type=ws#🇫🇷 法国 [10%] 纯净 ...
 ```
 
-# 6. 按照延迟和下载速度排序节点
+# 6. 按照不同指标排序节点
 
 ```shell
+# 按照延迟和下载速度排序节点
 clash-speedtest -c "https://domain.com/api/v1/client/subscribe?token=secret&flag=meta" -sort "latency|download"
+
+# 使用加权排序（综合考虑所有性能指标）
+clash-speedtest -c "https://domain.com/api/v1/client/subscribe?token=secret&flag=meta" -sort "weighted"
 ```
+
+加权排序（weighted）是一种综合评分机制，它会根据节点的多项性能指标计算一个综合得分：
+- 在普通模式下：延迟(30%)、抖动(15%)、丢包率(15%)、下载速度(30%)、上传速度(10%)
+- 在Fast模式下：延迟(60%)、抖动(20%)、丢包率(20%)
+
+这种排序方式能够帮助你找到综合性能最佳的节点，而不仅仅关注单一指标。
 
 
 
