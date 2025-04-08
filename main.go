@@ -391,10 +391,10 @@ func saveConfig(results []*speedtester.Result) error {
 			}
 			// 添加中文国家名称
 			if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
-				countryCount[chineseName]+=1
+				countryCount[chineseName] += 1
 				newName += chineseName
-				if countryCount[chineseName] > 1 {
-					newName += fmt.Sprintf(" %d", countryCount[chineseName])
+				if countryCount[chineseName] >= 1 {
+					newName += fmt.Sprintf("%d", countryCount[chineseName])
 				}
 			}
 			// 添加风险信息
