@@ -3,8 +3,10 @@ package utils
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -32,14 +34,42 @@ func (ic *IPChecker) FetchScamalytics(ip string) (string, error) {
 		return "", err
 	}
 
-	initialResp, err := ic.Client.Do(req)
-	if err != nil {
-		fmt.Printf("Error fetching Scamalytics risk (initial request): %s\n", err)
-		return "", err
-	}
-	defer initialResp.Body.Close()
+	// 添加失败重试功能
+	var initialBody []byte
+	maxRetries := 3
+	var lastErr error
 
-	initialBody, err := io.ReadAll(initialResp.Body)
+	for i := 0; i < maxRetries; i++ {
+		if i > 0 {
+			// 重试前等待随机时间
+			time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+			fmt.Printf("重试获取Scamalytics风险值 (尝试 %d/%d)\n", i+1, maxRetries)
+		}
+
+		initialResp, err := ic.Client.Do(req)
+		if err != nil {
+			lastErr = err
+			fmt.Printf("Error fetching Scamalytics risk (attempt %d/%d): %s\n", i+1, maxRetries, err)
+			continue
+		}
+
+		defer initialResp.Body.Close()
+		initialBody, err = io.ReadAll(initialResp.Body)
+		if err != nil {
+			lastErr = err
+			fmt.Printf("Error reading response body (attempt %d/%d): %s\n", i+1, maxRetries, err)
+			continue
+		}
+
+		// 成功获取响应，跳出重试循环
+		lastErr = nil
+		break
+	}
+
+	// 如果所有重试都失败
+	if lastErr != nil {
+		return "", fmt.Errorf("达到最大重试次数 (%d): %v", maxRetries, lastErr)
+	}
 
 	riskScore := ParseScamalytics(string(initialBody))
 
@@ -48,7 +78,7 @@ func (ic *IPChecker) FetchScamalytics(ip string) (string, error) {
 
 	// 判断风险级别
 	riskLevel := ""
-	if riskScoreInt < 33 {
+	if riskScoreInt <= 33 {
 		riskLevel = "纯净"
 	} else if riskScoreInt <= 66 {
 		riskLevel = "一般"
