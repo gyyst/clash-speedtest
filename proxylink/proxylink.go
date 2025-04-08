@@ -253,9 +253,6 @@ func getBaseParams(config map[string]any, authKey string) string {
 func handleTLSConfig(config map[string]any, params url.Values) {
 	if getBool(config, "tls") {
 		params.Set("security", "reality")
-		if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
-			params.Set("sni", sni)
-		}
 		if fp := getString(config, "client-fingerprint"); fp != "" {
 			params.Set("fp", fp)
 		}
@@ -272,7 +269,9 @@ func handleTLSConfig(config map[string]any, params url.Values) {
 			}
 		}
 	}
-
+	if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
+		params.Set("sni", sni)
+	}
 }
 
 func handleWsConfig(config map[string]any, vmess map[string]any) {
