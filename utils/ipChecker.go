@@ -42,8 +42,8 @@ func (ic *IPChecker) FetchScamalytics(ip string) (string, error) {
 	for i := 0; i < maxRetries; i++ {
 		if i > 0 {
 			// 重试前等待随机时间
-			time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
-			fmt.Printf("重试获取Scamalytics风险值 (尝试 %d/%d)\n", i+1, maxRetries)
+			time.Sleep(time.Duration(rand.Intn(1000)+100) * time.Millisecond)
+			// fmt.Printf("重试获取Scamalytics风险值 (尝试 %d/%d)\n", i+1, maxRetries)
 		}
 
 		initialResp, err := ic.Client.Do(req)

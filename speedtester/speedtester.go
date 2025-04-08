@@ -544,9 +544,8 @@ func sendNetworkRequest(ip string) bool {
 	// 检查所有字段是否都为true
 	if !response.Error && response.Data.Success {
 		netData := response.Data.Data
-		return netData.InnerICMP && netData.OutICMP
+		return netData.InnerICMP || netData.InnerTCP
 	}
-
 	return false
 }
 
