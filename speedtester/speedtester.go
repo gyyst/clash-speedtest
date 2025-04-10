@@ -106,6 +106,9 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 		proxiesConfig := rawCfg.Proxies
 		providersConfig := rawCfg.Providers
 
+		// 过滤掉无效的节点
+		proxiesConfig = filterInvalidProxies(proxiesConfig)
+
 		for i, config := range proxiesConfig {
 			proxy, err := adapter.ParseProxy(config)
 			if err != nil {
@@ -657,6 +660,24 @@ func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyR
 	result.jitter = time.Duration(math.Sqrt(variance))
 
 	return result
+}
+
+// filterInvalidProxies 过滤掉无效的节点，如类型为ss且cipher属性为ss的节点
+func filterInvalidProxies(proxiesConfig []map[string]any) []map[string]any {
+	filteredProxiesConfig := make([]map[string]any, 0, len(proxiesConfig))
+	for _, config := range proxiesConfig {
+		// 检查节点类型是否为ss
+		if typeValue, ok := config["type"]; ok && typeValue == "ss" {
+			// 检查cipher属性是否为ss
+			if cipherValue, ok := config["cipher"]; ok && cipherValue == "ss" {
+				// 跳过这个节点
+				continue
+			}
+		}
+		// 将有效节点添加到过滤后的列表
+		filteredProxiesConfig = append(filteredProxiesConfig, config)
+	}
+	return filteredProxiesConfig
 }
 
 func getString(m map[string]any, keys ...string) string {
