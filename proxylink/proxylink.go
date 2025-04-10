@@ -114,7 +114,7 @@ func generateTrojanLink(proxyName string, config map[string]any) (string, error)
 	}
 	// 网络类型处理
 	switch network := getString(config, "network"); network {
-	case "ws", "grpc":
+	case "ws", "grpc", "tcp":
 		params.Set("type", network)
 		handleTransportParams(config, network, params)
 	}
@@ -330,6 +330,18 @@ func handleTransportParams(config map[string]any, network string, params url.Val
 		case "grpc":
 			if service := getString(opts, "grpc-service-name"); service != "" {
 				params.Set("serviceName", service)
+			}
+		case "tcp":
+			// 处理TCP的参数
+			if allowInsecure := getBool(config, "skip-cert-verify"); allowInsecure {
+				if allowInsecure {
+					params.Set("allowInsecure", "1")
+				} else {
+					params.Set("allowInsecure", "0")
+				}
+			}
+			if peer := getString(config, "sni"); peer != "" {
+				params.Set("peer", peer)
 			}
 		}
 	}
