@@ -18,8 +18,10 @@ func GenerateProxyLink(proxyName string, proxyType string, proxyConfig map[strin
 		return generateVlessLink(proxyName, proxyConfig)
 	case "trojan":
 		return generateTrojanLink(proxyName, proxyConfig)
-	case "shadowsocks":
+	case "shadowsocks", "ss":
 		return generateShadowsocksLink(proxyName, proxyConfig)
+	case "shadowsocksr", "ssr":
+		return generateSSRLink(proxyName, proxyConfig)
 	case "hysteria2":
 		return generateHysteria2Link(proxyName, proxyConfig)
 	default:
@@ -143,6 +145,64 @@ func generateShadowsocksLink(proxyName string, config map[string]any) (string, e
 	}
 
 	return buildURL("ss", userInfo+"@"+server+":"+port, proxyName, params), nil
+}
+
+// ================== ShadowsocksR ==================
+func generateSSRLink(proxyName string, config map[string]any) (string, error) {
+	server := getString(config, "server")
+	port := getPort(config)
+	password := getString(config, "password")
+	method := getString(config, "cipher")
+	protocol := getString(config, "protocol", "origin")
+	obfs := getString(config, "obfs", "plain")
+
+	if server == "" || port == "" || password == "" || method == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
+	}
+
+	// 构建基础链接部分
+	base := fmt.Sprintf("%s:%s:%s:%s:%s:%s",
+		server,
+		port,
+		protocol,
+		method,
+		obfs,
+		base64.RawURLEncoding.EncodeToString([]byte(password)))
+
+	// 构建参数部分
+	params := make(map[string]string)
+
+	// 处理混淆参数
+	if obfsParam := getString(config, "obfs-param"); obfsParam != "" {
+		params["obfsparam"] = base64.RawURLEncoding.EncodeToString([]byte(obfsParam))
+	}
+
+	// 处理协议参数
+	if protocolParam := getString(config, "protocol-param"); protocolParam != "" {
+		params["protoparam"] = base64.RawURLEncoding.EncodeToString([]byte(protocolParam))
+	}
+
+	// 添加备注（节点名称）
+	params["remarks"] = base64.RawURLEncoding.EncodeToString([]byte(proxyName))
+
+	// 处理分组
+	if group := getString(config, "group"); group != "" {
+		params["group"] = base64.RawURLEncoding.EncodeToString([]byte(group))
+	}
+
+	// 构建参数字符串
+	var paramStr string
+	if len(params) > 0 {
+		parts := make([]string, 0, len(params))
+		for k, v := range params {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+		}
+		paramStr = "/" + strings.Join(parts, "&")
+	}
+
+	// 组合完整链接并进行Base64编码
+	fullLink := base + paramStr
+	return "ssr://" + base64.RawURLEncoding.EncodeToString([]byte(fullLink)), nil
 }
 
 // ================== Hysteria2 ==================
