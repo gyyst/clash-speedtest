@@ -562,6 +562,16 @@ func saveConfig(results []*speedtester.Result) error {
 			newName = originalName
 		}
 
+		// 添加下载和上传速度信息（非Fast模式下）
+		if !*fastMode {
+			// 格式化下载和上传速度
+			downloadSpeedStr := result.FormatDownloadSpeed()
+			uploadSpeedStr := result.FormatUploadSpeed()
+
+			// 添加到节点名称中
+			newName += fmt.Sprintf(" ⬇%s ⬆%s", downloadSpeedStr, uploadSpeedStr)
+		}
+
 		// 添加流媒体解锁信息
 		if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
 			unlockResults := make([]string, 0)
@@ -579,6 +589,7 @@ func saveConfig(results []*speedtester.Result) error {
 				newName += " [" + strings.Join(unlockResults, "| ") + "]"
 			}
 		}
+
 		proxyName := newName
 		link, err := proxylink.GenerateProxyLink(proxyName, result.ProxyType, result.ProxyConfig)
 		if err != nil {
