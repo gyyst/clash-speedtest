@@ -668,9 +668,15 @@ func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyR
 	return result
 }
 
-// filterInvalidProxies 过滤掉无效的节点，如类型为ss且cipher属性为ss的节点
+// filterInvalidProxies 过滤掉无效的节点和重复的节点
+// 无效节点：类型为ss且cipher属性为ss的节点
+// 重复节点：根据节点配置内容判断，如果所有字段内容都相同则视为重复节点，只保留第一个出现的节点
+// 注意：即使字段的顺序不同，只要值相同也会被视为重复节点
 func filterInvalidProxies(proxiesConfig []map[string]any) []map[string]any {
 	filteredProxiesConfig := make([]map[string]any, 0, len(proxiesConfig))
+	// 用于存储已添加节点的配置特征
+	addedConfigs := make(map[string]bool)
+
 	for _, config := range proxiesConfig {
 		// 检查节点类型是否为ss
 		if typeValue, ok := config["type"]; ok && typeValue == "ss" {
@@ -680,8 +686,37 @@ func filterInvalidProxies(proxiesConfig []map[string]any) []map[string]any {
 				continue
 			}
 		}
-		// 将有效节点添加到过滤后的列表
-		filteredProxiesConfig = append(filteredProxiesConfig, config)
+
+		// 创建一个规范化的配置表示，确保字段顺序不影响比较结果
+		// 1. 获取所有键并排序
+		keys := make([]string, 0, len(config))
+		for k := range config {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		// 2. 按排序后的键顺序创建一个新的有序映射
+		orderedMap := make(map[string]any)
+		for _, k := range keys {
+			orderedMap[k] = config[k]
+		}
+
+		// 3. 将有序映射序列化为JSON字符串
+		configBytes, err := json.Marshal(orderedMap)
+		if err != nil {
+			// 如果无法序列化，仍然添加该节点
+			filteredProxiesConfig = append(filteredProxiesConfig, config)
+			continue
+		}
+		configStr := string(configBytes)
+
+		// 检查是否已经添加过相同配置的节点
+		if _, exists := addedConfigs[configStr]; !exists {
+			// 记录这个配置
+			addedConfigs[configStr] = true
+			// 将有效且不重复的节点添加到过滤后的列表
+			filteredProxiesConfig = append(filteredProxiesConfig, config)
+		}
 	}
 	return filteredProxiesConfig
 }
