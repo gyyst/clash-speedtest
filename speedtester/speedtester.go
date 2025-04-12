@@ -431,6 +431,7 @@ type latencyResult struct {
 func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	client := st.createClient(proxy)
 	failedPings := 0
+	var failedPingsMutex sync.Mutex
 
 	latencyResults := make(chan time.Duration, 10)
 	var wg sync.WaitGroup
@@ -439,20 +440,24 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// 随机休眠10-100毫秒
-			time.Sleep(time.Duration(rand.Intn(91)+10) * time.Millisecond)
+			// 随机休眠1-200毫秒
+			time.Sleep(time.Duration(rand.Intn(200)+1) * time.Millisecond)
 
 			start := time.Now()
 			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
 			if err != nil {
+				failedPingsMutex.Lock()
 				failedPings++
+				failedPingsMutex.Unlock()
 				return
 			}
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				latencyResults <- time.Since(start)
 			} else {
+				failedPingsMutex.Lock()
 				failedPings++
+				failedPingsMutex.Unlock()
 			}
 		}()
 	}
@@ -463,8 +468,9 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	wg.Wait()
 	if failedPings > 10 {
 		failedPings = 10
-
 	}
+	// 获取最终的failedPings值用于计算
+	finalFailedPings := failedPings
 	close(latencyResults)
 
 	latencies := make([]time.Duration, 0, len(latencyResults))
@@ -472,7 +478,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		latencies = append(latencies, latency)
 	}
 
-	return calculateLatencyStats(latencies, failedPings)
+	return calculateLatencyStats(latencies, finalFailedPings)
 }
 
 type downloadResult struct {
