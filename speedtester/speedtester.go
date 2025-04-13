@@ -688,20 +688,29 @@ func filterInvalidProxies(proxiesConfig []map[string]any) []map[string]any {
 		}
 
 		// 创建一个规范化的配置表示，确保字段顺序不影响比较结果
-		// 1. 获取所有键并排序
-		keys := make([]string, 0, len(config))
-		for k := range config {
+		// 1. 创建配置的副本，并从中移除name字段（忽略节点名称）
+		configCopy := make(map[string]any)
+		for k, v := range config {
+			// 跳过name字段，不将其加入比较
+			if k != "name" {
+				configCopy[k] = v
+			}
+		}
+
+		// 2. 获取所有键并排序
+		keys := make([]string, 0, len(configCopy))
+		for k := range configCopy {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 
-		// 2. 按排序后的键顺序创建一个新的有序映射
+		// 3. 按排序后的键顺序创建一个新的有序映射
 		orderedMap := make(map[string]any)
 		for _, k := range keys {
-			orderedMap[k] = config[k]
+			orderedMap[k] = configCopy[k]
 		}
 
-		// 3. 将有序映射序列化为JSON字符串
+		// 4. 将有序映射序列化为JSON字符串
 		configBytes, err := json.Marshal(orderedMap)
 		if err != nil {
 			// 如果无法序列化，仍然添加该节点
