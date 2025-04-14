@@ -490,6 +490,7 @@ type downloadResult struct {
 func checkCNNetwork(proxy *CProxy) bool {
 	// 获取服务器地址,如果是域名则解析IP
 	server := getString(proxy.Config, "server")
+	port := getString(proxy.Config, "port")
 	if server != "" {
 		// 检查是否为域名
 		if ips, err := net.LookupIP(server); err == nil {
@@ -501,18 +502,19 @@ func checkCNNetwork(proxy *CProxy) bool {
 				}
 			}
 		}
-		return sendNetworkRequest(server)
+		return checkCnWall(server, port)
 	}
 	return false
 }
 
-func sendNetworkRequest(ip string) bool {
-	url := "https://www.vps234.com/ipcheck/getdata/"
+func checkCnWall(ip string, port string) bool {
+	url := "https://api.ycwxgzs.com/ipcheck/index.php"
 	method := "POST"
 
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
 	_ = writer.WriteField("ip", ip)
+	_ = writer.WriteField("port", port)
 	_ = writer.Close()
 
 	client := &http.Client{}
@@ -528,21 +530,12 @@ func sendNetworkRequest(ip string) bool {
 		return false
 	}
 
-	// 定义JSON响应结构
-	type NetworkCheckData struct {
-		InnerICMP bool `json:"innerICMP"`
-		InnerTCP  bool `json:"innerTCP"`
-		OutICMP   bool `json:"outICMP"`
-		OutTCP    bool `json:"outTCP"`
-	}
-
+	// 尝试解析新的JSON响应格式
 	type NetworkCheckResponse struct {
-		Error bool `json:"error"`
-		Data  struct {
-			Success bool             `json:"success"`
-			Msg     string           `json:"msg"`
-			Data    NetworkCheckData `json:"data"`
-		} `json:"data"`
+		Ip   string `json:"ip"`
+		Port string `json:"port"`
+		Tcp  string `json:"tcp"`
+		Icmp string `json:"icmp"`
 	}
 
 	// 解析JSON响应
@@ -551,13 +544,10 @@ func sendNetworkRequest(ip string) bool {
 		return false
 	}
 
-	// 检查所有字段是否都为true
-	if !response.Error && response.Data.Success {
-		netData := response.Data.Data
-		return netData.InnerICMP || netData.InnerTCP
-	}
-	return false
+	// 检查TCP或ICMP是否包含"不可用"字样
+	return !strings.Contains(response.Tcp, "不可用")
 }
+
 
 func (st *SpeedTester) testDownload(proxy constant.Proxy, size int) *downloadResult {
 	client := st.createClient(proxy)
