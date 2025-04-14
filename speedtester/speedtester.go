@@ -112,7 +112,8 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 		for i, config := range proxiesConfig {
 			proxy, err := adapter.ParseProxy(config)
 			if err != nil {
-				return nil, fmt.Errorf("proxy %d: %w", i, err)
+				fmt.Println(fmt.Errorf("proxy %d: %w", i, err))
+				continue
 			}
 
 			if _, exist := proxies[proxy.Name()]; exist {
