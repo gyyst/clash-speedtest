@@ -43,10 +43,14 @@ func generateVmessLink(proxyName string, config map[string]any) (string, error) 
 		"port": getPort(config),
 		"id":   getString(config, "uuid"),
 		"aid":  getString(config, "alterId", "0"),
-		"scy":  getString(config, "cipher", "auto"),
 		"net":  getString(config, "network", "tcp"),
 		"type": "none",
-		"tls":  "none",
+		"tls":  "tls",
+	}
+	if getString(config, "cipher") == "auto" {
+		vmess["scy"] = "none"
+	} else {
+		vmess["scy"] = getString(config, "cipher")
 	}
 
 	// 处理传输类型
