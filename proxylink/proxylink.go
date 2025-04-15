@@ -45,7 +45,7 @@ func generateVmessLink(proxyName string, config map[string]any) (string, error) 
 		"aid":  getString(config, "alterId", "0"),
 		"net":  getString(config, "network", "tcp"),
 		"type": "none",
-		"tls":  "tls",
+		"tls":  getBool(config, "tls"),
 	}
 	if getString(config, "cipher") == "auto" {
 		vmess["scy"] = "none"
