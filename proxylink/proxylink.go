@@ -45,7 +45,6 @@ func generateVmessLink(proxyName string, config map[string]any) (string, error) 
 		"aid":  getString(config, "alterId", "0"),
 		"net":  getString(config, "network", "tcp"),
 		"type": "none",
-		"tls":  getBool(config, "tls"),
 	}
 	if getString(config, "cipher") == "auto" {
 		vmess["scy"] = "none"
@@ -66,8 +65,12 @@ func generateVmessLink(proxyName string, config map[string]any) (string, error) 
 	vmess["sni"] = getString(config, "sni", "servername")
 	// TLS处理
 	if getBool(config, "tls") {
+		vmess["tls"] = "tls"
 		vmess["alpn"] = strings.Join(getSlice(config, "alpn"), ",")
 		vmess["fp"] = getString(config, "client-fingerprint", "chrome")
+	} else {
+		//不知道填啥了
+		vmess["tls"] = "none"
 	}
 
 	jsonData, _ := json.Marshal(vmess)
