@@ -66,7 +66,6 @@ func generateVmessLink(proxyName string, config map[string]any) (string, error) 
 	vmess["sni"] = getString(config, "sni", "servername")
 	// TLS处理
 	if getBool(config, "tls") {
-		vmess["tls"] = "tls"
 		vmess["alpn"] = strings.Join(getSlice(config, "alpn"), ",")
 		vmess["fp"] = getString(config, "client-fingerprint", "chrome")
 	}
