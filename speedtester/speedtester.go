@@ -492,16 +492,16 @@ func checkCNNetwork(proxy *CProxy) bool {
 	server := getString(proxy.Config, "server")
 	port := getString(proxy.Config, "port")
 	if server != "" {
-		// 检查是否为域名
-		if ips, err := net.LookupIP(server); err == nil {
-			// 如果能成功解析IP,则使用第一个IP地址
-			for _, ip := range ips {
-				if ipv4 := ip.To4(); ipv4 != nil {
-					server = ipv4.String()
-					break
-				}
-			}
-		}
+		// // 检查是否为域名
+		// if ips, err := net.LookupIP(server); err == nil {
+		// 	// 如果能成功解析IP,则使用第一个IP地址
+		// 	for _, ip := range ips {
+		// 		if ipv4 := ip.To4(); ipv4 != nil {
+		// 			server = ipv4.String()
+		// 			break
+		// 		}
+		// 	}
+		// }
 		return checkCnWall(server, port)
 	}
 	return false
@@ -517,7 +517,10 @@ func checkCnWall(ip string, port string) bool {
 	_ = writer.WriteField("port", port)
 	_ = writer.Close()
 
-	client := &http.Client{}
+	// 设置6秒超时时间
+	client := &http.Client{
+		Timeout: 6 * time.Second,
+	}
 	req, _ := http.NewRequest(method, url, payload)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	res, err := client.Do(req)
@@ -547,7 +550,6 @@ func checkCnWall(ip string, port string) bool {
 	// 检查TCP或ICMP是否包含"不可用"字样
 	return !strings.Contains(response.Tcp, "不可用")
 }
-
 
 func (st *SpeedTester) testDownload(proxy constant.Proxy, size int) *downloadResult {
 	client := st.createClient(proxy)
