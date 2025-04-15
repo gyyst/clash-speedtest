@@ -277,7 +277,8 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	result.Jitter = latencyResult.jitter
 	result.PacketLoss = latencyResult.packetLoss
 
-	// 如果延迟测试完全失败，直接返回，cnip被墙的话返回100%
+	// 如果延迟测试完全失败或中国联通性检测失败，直接返回
+	// 中国联通性检测失败时，packetLoss会被设置为100%
 	if result.PacketLoss >= 50 {
 		return result
 	}
@@ -462,14 +463,19 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			}
 		}()
 	}
-	//测试server的中国连通性
-	if !checkCNNetwork(proxy) {
-		failedPings = 20
-	}
+	// 等待所有ping测试完成
 	wg.Wait()
-	if failedPings > 20 {
-		failedPings = 20
+
+	// 测试server的中国连通性
+	if !checkCNNetwork(proxy) {
+		// 直接返回表示中国连通性失败的结果
+		return &latencyResult{
+			packetLoss: 100, // 设置为100%丢包率表示完全不可用
+			avgLatency: 9999,
+			jitter:     9999,
+		}
 	}
+
 	// 获取最终的failedPings值用于计算
 	finalFailedPings := failedPings
 	close(latencyResults)
@@ -492,16 +498,16 @@ func checkCNNetwork(proxy *CProxy) bool {
 	server := getString(proxy.Config, "server")
 	port := getString(proxy.Config, "port")
 	if server != "" {
-		// // 检查是否为域名
-		// if ips, err := net.LookupIP(server); err == nil {
-		// 	// 如果能成功解析IP,则使用第一个IP地址
-		// 	for _, ip := range ips {
-		// 		if ipv4 := ip.To4(); ipv4 != nil {
-		// 			server = ipv4.String()
-		// 			break
-		// 		}
-		// 	}
-		// }
+		// 检查是否为域名
+		if ips, err := net.LookupIP(server); err == nil {
+			// 如果能成功解析IP,则使用第一个IP地址
+			for _, ip := range ips {
+				if ipv4 := ip.To4(); ipv4 != nil {
+					server = ipv4.String()
+					break
+				}
+			}
+		}
 		return checkCnWall(server, port)
 	}
 	return false
@@ -510,7 +516,9 @@ func checkCNNetwork(proxy *CProxy) bool {
 func checkCnWall(ip string, port string) bool {
 	url := "https://api.ycwxgzs.com/ipcheck/index.php"
 	method := "POST"
-
+	// fmt.Println()
+	// fmt.Println("ip:", ip)
+	// fmt.Println("port:", port)
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
 	_ = writer.WriteField("ip", ip)
