@@ -434,15 +434,15 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	failedPings := 0
 	var failedPingsMutex sync.Mutex
 
-	latencyResults := make(chan time.Duration, 10)
+	latencyResults := make(chan time.Duration, 20)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// 随机休眠1-200毫秒
-			time.Sleep(time.Duration(rand.Intn(200)+1) * time.Millisecond)
+			// 随机休眠10-210毫秒
+			time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 
 			start := time.Now()
 			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
@@ -464,11 +464,11 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	}
 	//测试server的中国连通性
 	if !checkCNNetwork(proxy) {
-		failedPings = 10
+		failedPings = 20
 	}
 	wg.Wait()
-	if failedPings > 10 {
-		failedPings = 10
+	if failedPings > 20 {
+		failedPings = 20
 	}
 	// 获取最终的failedPings值用于计算
 	finalFailedPings := failedPings
@@ -622,7 +622,7 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 
 func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyResult {
 	result := &latencyResult{
-		packetLoss: float64(failedPings) / 10.0 * 100,
+		packetLoss: float64(failedPings) / 20.0 * 100,
 	}
 
 	if len(latencies) == 0 {
