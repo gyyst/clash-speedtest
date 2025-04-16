@@ -269,7 +269,7 @@ func main() {
 					scoreJ := calculateWeightedScore(results, j)
 					// 得分越低越好
 					if scoreI != scoreJ {
-						return scoreI < scoreJ
+						return scoreI <= scoreJ
 					}
 				}
 			}

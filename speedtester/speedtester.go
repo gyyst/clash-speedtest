@@ -471,8 +471,8 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		// 直接返回表示中国连通性失败的结果
 		return &latencyResult{
 			packetLoss: 100, // 设置为100%丢包率表示完全不可用
-			avgLatency: 9999,
-			jitter:     9999,
+			avgLatency: 99999,
+			jitter:     99999,
 		}
 	}
 
