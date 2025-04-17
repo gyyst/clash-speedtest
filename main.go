@@ -592,6 +592,7 @@ func saveConfig(results []*speedtester.Result) error {
 
 		proxyName := newName
 		link, err := proxylink.GenerateProxyLink(proxyName, result.ProxyType, result.ProxyConfig)
+		
 		if err != nil {
 			// 如果生成链接失败，使用代理名称
 			link = proxyName
