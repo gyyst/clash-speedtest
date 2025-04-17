@@ -463,19 +463,18 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			}
 		}()
 	}
-	// 等待所有ping测试完成
-	wg.Wait()
 
 	// 测试server的中国连通性
 	if !checkCNNetwork(proxy) {
 		// 直接返回表示中国连通性失败的结果
 		return &latencyResult{
 			packetLoss: 100, // 设置为100%丢包率表示完全不可用
-			avgLatency: 99999,
-			jitter:     99999,
+			avgLatency: 0,
+			jitter:     0,
 		}
 	}
-
+	// 等待所有ping测试完成
+	wg.Wait()
 	// 获取最终的failedPings值用于计算
 	finalFailedPings := failedPings
 	close(latencyResults)
