@@ -465,7 +465,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	}
 
 	// 测试server的中国连通性
-	if !checkCNNetwork(proxy) {
+	if !checkCNNetwork(proxy, client) {
 		// 直接返回表示中国连通性失败的结果
 		return &latencyResult{
 			packetLoss: 100, // 设置为100%丢包率表示完全不可用
@@ -492,7 +492,7 @@ type downloadResult struct {
 	duration time.Duration
 }
 
-func checkCNNetwork(proxy *CProxy) bool {
+func checkCNNetwork(proxy *CProxy, client *http.Client) bool {
 	// 获取服务器地址,如果是域名则解析IP
 	server := getString(proxy.Config, "server")
 	port := getString(proxy.Config, "port")
@@ -507,9 +507,26 @@ func checkCNNetwork(proxy *CProxy) bool {
 				}
 			}
 		}
-		return checkCnWall(server, port)
+		return checkCnWall(server, port) && checkCnWallBy204(client)
 	}
-	return false
+	return checkCnWallBy204(client)
+}
+func checkCnWallBy204(client *http.Client) bool {
+	url := "https://220.185.180.69/generate_204"
+	method := "GET"
+
+	payload := &bytes.Buffer{}
+
+	req, _ := http.NewRequest(method, url, payload)
+
+	req.Header.Set("Host", "connectivitycheck.platform.hicloud.com")
+	res, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer res.Body.Close()
+
+	return res.StatusCode == http.StatusNoContent
 }
 
 func checkCnWall(ip string, port string) bool {
