@@ -34,9 +34,6 @@ func GenerateHysteria2Link(proxyName string, config map[string]any) (string, err
 	if obfs_password := getString(config, "obfs-password"); obfs_password != "" {
 		params.Set("obfs-password", obfs_password)
 	}
-	if obfs_password := getString(config, "obfs-password"); obfs_password != "" {
-		params.Set("obfs-password", obfs_password)
-	}
 	if insecure := getString(config, "insecure"); insecure != "" {
 		params.Set("insecure", insecure)
 	}

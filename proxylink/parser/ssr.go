@@ -14,8 +14,8 @@ func GenerateSSRLink(proxyName string, config map[string]any) (string, error) {
 	port := getPort(config)
 	password := getString(config, "password")
 	method := getString(config, "cipher")
-	protocol := getString(config, "protocol", "origin")
-	obfs := getString(config, "obfs", "plain")
+	protocol := getStringWithDefault(config, "protocol", "origin")
+	obfs := getStringWithDefault(config, "obfs", "plain")
 
 	if server == "" || port == "" || password == "" || method == "" {
 		return proxyName, fmt.Errorf("missing required parameters")

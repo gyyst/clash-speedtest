@@ -15,7 +15,7 @@ func GenerateTrojanLink(proxyName string, config map[string]any) (string, error)
 	}
 
 	params := url.Values{}
-	if sni := getString(config, "sni", getString(config, "sni")); sni != "" {
+	if sni := getString(config, "sni", "servername"); sni != "" {
 		params.Set("sni", sni)
 	}
 	if alpn := getSlice(config, "alpn"); len(alpn) > 0 {

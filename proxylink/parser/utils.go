@@ -24,7 +24,29 @@ func getString(m map[string]any, keys ...string) string {
 		}
 	}
 
-	return keys[len(keys)-1]
+	return ""
+}
+
+// ================== Helper Functions ==================
+func getStringWithDefault(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := m[key]; ok {
+			switch v := val.(type) {
+			case string:
+				return v
+			case int:
+				return strconv.Itoa(v)
+			case float64:
+				return fmt.Sprintf("%.0f", v)
+			case bool:
+				return strconv.FormatBool(v)
+			}
+		}
+	}
+	if len(keys) > 1 {
+		return keys[len(keys)-1]
+	}
+	return ""
 }
 
 // getBool 从配置映射中获取布尔值
@@ -108,14 +130,14 @@ func handleTLSConfig(config map[string]any, params url.Values) {
 			}
 		}
 	}
-	if sni := getString(config, "servername", getString(config, "sni")); sni != "" {
+	if sni := getString(config, "servername", "sni"); sni != "" {
 		params.Set("sni", sni)
 	}
 }
 
 func handleWsConfig(config map[string]any, vmess map[string]any) {
 	if opts, ok := config["ws-opts"].(map[string]any); ok {
-		vmess["path"] = getString(opts, "path", "/")
+		vmess["path"] = getStringWithDefault(opts, "path", "/")
 		if headers, ok := opts["headers"].(map[string]any); ok {
 			vmess["host"] = getString(headers, "Host")
 		}
@@ -124,7 +146,7 @@ func handleWsConfig(config map[string]any, vmess map[string]any) {
 
 func handleHttpConfig(config map[string]any, vmess map[string]any) {
 	if opts, ok := config["http-opts"].(map[string]any); ok {
-		vmess["path"] = getString(opts, "path", "/")
+		vmess["path"] = getStringWithDefault(opts, "path", "/")
 		if headers, ok := opts["headers"].(map[string]any); ok {
 			vmess["host"] = getString(headers, "Host")
 		}

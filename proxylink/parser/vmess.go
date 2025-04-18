@@ -24,8 +24,8 @@ func GenerateVmessLink(proxyName string, config map[string]any) (string, error) 
 		"add":  getString(config, "server"),
 		"port": getPort(config),
 		"id":   getString(config, "uuid"),
-		"aid":  getString(config, "alterId", "0"),
-		"net":  getString(config, "network", "tcp"),
+		"aid":  getStringWithDefault(config, "alterId", "0"),
+		"net":  getStringWithDefault(config, "network", "tcp"),
 		"type": "none",
 	}
 
