@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -19,7 +18,7 @@ func GenerateShadowsocksLink(proxyName string, config map[string]any) (string, e
 		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	userInfo := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", cipher, password)))
+	userInfo := EncodeBase64(fmt.Sprintf("%s:%s", cipher, password))
 	params := url.Values{}
 
 	// 插件处理

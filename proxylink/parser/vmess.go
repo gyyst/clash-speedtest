@@ -30,10 +30,10 @@ func GenerateVmessLink(proxyName string, config map[string]any) (string, error) 
 	}
 
 	// 处理加密方式
-	if getString(config, "cipher") == "auto" {
-		vmess["scy"] = "none"
-	} else {
+	if getString(config, "cipher") != "" {
 		vmess["scy"] = getString(config, "cipher")
+	} else {
+		vmess["scy"] = "auto"
 	}
 
 	// 处理传输类型
@@ -64,25 +64,25 @@ func GenerateVmessLink(proxyName string, config map[string]any) (string, error) 
 
 	// 序列化并编码
 	jsonData, _ := json.Marshal(vmess)
-	return "vmess://" + base64.StdEncoding.EncodeToString(jsonData), nil
+	return "vmess://" + EncodeBase64(string(jsonData)), nil
 }
 
 type VmessJson struct {
-	V    any    `json:"v"`
-	Ps   string `json:"ps"`
-	Add  string `json:"add"`
-	Port any    `json:"port"`
-	Id   string `json:"id"`
-	Aid  any    `json:"aid"`
-	Scy  string `json:"scy"`
-	Net  string `json:"net"`
-	Type string `json:"type"`
-	Host string `json:"host"`
-	Path string `json:"path"`
-	Tls  string `json:"tls"`
-	Sni  string `json:"sni"`
-	Alpn string `json:"alpn"`
-	Fp   string `json:"fp"`
+	V    any    `json:"v"`    // 类型为any
+	Ps   string `json:"ps"`   // 类型为string
+	Add  string `json:"add"`  // 类型为string
+	Port any    `json:"port"` // 类型为any
+	Id   string `json:"id"`   // 类型为string
+	Aid  any    `json:"aid"`  // 类型为any
+	Scy  string `json:"scy"`  // 类型为string
+	Net  string `json:"net"`  // 类型为string
+	Type string `json:"type"` // 类型为string
+	Host string `json:"host"` // 类型为string
+	Path string `json:"path"` // 类型为string
+	Tls  string `json:"tls"`  // 类型为string
+	Sni  string `json:"sni"`  // 类型为string
+	Alpn string `json:"alpn"` // 类型为string
+	Fp   string `json:"fp"`   // 类型为string
 }
 
 // 将vmess格式的节点转换为clash格式

@@ -23,7 +23,8 @@ func getString(m map[string]any, keys ...string) string {
 			}
 		}
 	}
-	return ""
+
+	return keys[len(keys)-1]
 }
 
 // getBool 从配置映射中获取布尔值

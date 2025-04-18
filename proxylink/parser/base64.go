@@ -73,3 +73,9 @@ func DecodeBase64(s string) string {
 
 	return string(decoded)
 }
+
+// EncodeBase64 将字符串编码为 base64 格式
+func EncodeBase64(s string) string {
+	// 编码为标准 base64
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
