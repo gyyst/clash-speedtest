@@ -21,6 +21,8 @@ func GenerateProxyLink(proxyName string, proxyType string, proxyConfig map[strin
 		return parser.GenerateSSRLink(proxyName, proxyConfig)
 	case "hysteria2":
 		return parser.GenerateHysteria2Link(proxyName, proxyConfig)
+	case "tuic5":
+		return parser.GenerateTuicLink(proxyName, proxyConfig)
 	default:
 		return proxyName, nil
 	}
