@@ -5,87 +5,118 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
-// 将clash格式的节点转换为ssr格式
-func ParseSsr(proxyName string,data map[string]any) (string, error) {
-	// 检查必要参数
-	server, ok := data["server"].(string)
-	if !ok || server == "" {
-		return "", fmt.Errorf("缺少必要参数: server")
+// ================== ShadowsocksR ==================
+func GenerateSSRLink(proxyName string, config map[string]any) (string, error) {
+	server := getString(config, "server")
+	port := getPort(config)
+	password := getString(config, "password")
+	method := getString(config, "cipher")
+	protocol := getString(config, "protocol", "origin")
+	obfs := getString(config, "obfs", "plain")
+
+	if server == "" || port == "" || password == "" || method == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	var port int
-	switch v := data["port"].(type) {
-	case int:
-		port = v
-	case float64:
-		port = int(v)
-	case string:
-		var err error
-		port, err = strconv.Atoi(v)
-		if err != nil {
-			return "", fmt.Errorf("端口格式不正确")
-		}
-	default:
-		return "", fmt.Errorf("缺少必要参数: port")
-	}
-
-	password, ok := data["password"].(string)
-	if !ok || password == "" {
-		return "", fmt.Errorf("缺少必要参数: password")
-	}
-
-	cipher, ok := data["cipher"].(string)
-	if !ok || cipher == "" {
-		return "", fmt.Errorf("缺少必要参数: cipher")
-	}
-
-	protocol, ok := data["protocol"].(string)
-	if !ok || protocol == "" {
-		return "", fmt.Errorf("缺少必要参数: protocol")
-	}
-
-	obfs, ok := data["obfs"].(string)
-	if !ok || obfs == "" {
-		return "", fmt.Errorf("缺少必要参数: obfs")
-	}
-
-	// 构建基本部分
-	basePart := fmt.Sprintf("%s:%d:%s:%s:%s:%s",
+	// 构建基础链接部分
+	base := fmt.Sprintf("%s:%s:%s:%s:%s:%s",
 		server,
 		port,
 		protocol,
-		cipher,
+		method,
 		obfs,
-		base64.StdEncoding.EncodeToString([]byte(password)))
+		base64.RawURLEncoding.EncodeToString([]byte(password)))
 
 	// 构建参数部分
-	params := url.Values{}
+	params := make(map[string]string)
 
-	// 添加混淆参数
-	if obfsParam, ok := data["obfs-param"].(string); ok && obfsParam != "" {
-		params.Set("obfsparam", base64.StdEncoding.EncodeToString([]byte(obfsParam)))
+	// 处理混淆参数
+	if obfsParam := getString(config, "obfs-param"); obfsParam != "" {
+		params["obfsparam"] = base64.RawURLEncoding.EncodeToString([]byte(obfsParam))
 	}
 
-	// 添加协议参数
-	if protoParam, ok := data["protocol-param"].(string); ok && protoParam != "" {
-		params.Set("protoparam", base64.StdEncoding.EncodeToString([]byte(protoParam)))
+	// 处理协议参数
+	if protocolParam := getString(config, "protocol-param"); protocolParam != "" {
+		params["protoparam"] = base64.RawURLEncoding.EncodeToString([]byte(protocolParam))
 	}
 
-	// 添加备注
-	if name, ok := data["name"].(string); ok && name != "" {
-		params.Set("remarks", base64.StdEncoding.EncodeToString([]byte(name)))
+	// 添加备注（节点名称）
+	params["remarks"] = base64.RawURLEncoding.EncodeToString([]byte(proxyName))
+
+	// 处理分组
+	if group := getString(config, "group"); group != "" {
+		params["group"] = base64.RawURLEncoding.EncodeToString([]byte(group))
 	}
 
-	// 构建完整链接
-	var ssrURL string
+	// 构建参数字符串
+	var paramStr string
 	if len(params) > 0 {
-		ssrURL = fmt.Sprintf("%s/?%s", basePart, params.Encode())
-	} else {
-		ssrURL = basePart
+		parts := make([]string, 0, len(params))
+		for k, v := range params {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+		}
+		paramStr = "/" + strings.Join(parts, "&")
 	}
 
-	// 进行Base64编码并添加前缀
-	return "ssr://" + base64.StdEncoding.EncodeToString([]byte(ssrURL)), nil
+	// 组合完整链接并进行Base64编码
+	fullLink := base + paramStr
+	return "ssr://" + base64.RawURLEncoding.EncodeToString([]byte(fullLink)), nil
+}
+func ParseSsr(data string) (map[string]any, error) {
+	if !strings.HasPrefix(data, "ssr://") {
+		return nil, fmt.Errorf("不是ssr格式")
+	}
+	// todo: 这些参数解析应该也有问题
+	data = strings.TrimPrefix(data, "ssr://")
+	data = DecodeBase64(data)
+	serverInfoAndParams := strings.SplitN(data, "/?", 2)
+	parts := strings.Split(serverInfoAndParams[0], ":")
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("ssr 参数错误")
+	}
+	server := parts[0]
+	protocol := parts[2]
+	method := parts[3]
+	obfs := parts[4]
+	password := DecodeBase64(parts[5])
+	portStr := parts[1]
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("ssr 端口错误")
+	}
+	var obfsParam string
+	var protoParam string
+	var remarks string
+	if len(serverInfoAndParams) == 2 {
+		params, err := url.ParseQuery(serverInfoAndParams[1])
+		if err != nil {
+			return nil, fmt.Errorf("ssr 参数错误")
+		}
+		if params.Get("obfsparam") != "" {
+			obfsParam = DecodeBase64(params.Get("obfsparam"))
+		}
+		if params.Get("protoparam") != "" {
+			protoParam = DecodeBase64(params.Get("protoparam"))
+		}
+		if params.Get("remarks") != "" {
+			remarks = DecodeBase64(params.Get("remarks"))
+		} else {
+			remarks = server + ":" + strconv.Itoa(port)
+		}
+
+	}
+	return map[string]any{
+		"name":           remarks,
+		"server":         server,
+		"port":           port,
+		"password":       password,
+		"cipher":         method,
+		"obfs":           obfs,
+		"obfs-param":     obfsParam,
+		"protocol":       protocol,
+		"protocol-param": protoParam,
+	}, nil
 }

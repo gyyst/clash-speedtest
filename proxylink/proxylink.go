@@ -10,17 +10,17 @@ import (
 func GenerateProxyLink(proxyName string, proxyType string, proxyConfig map[string]any) (string, error) {
 	switch strings.ToLower(proxyType) {
 	case "vmess":
-		return parser.ParseVmess(proxyName, proxyConfig)
+		return parser.GenerateVmessLink(proxyName, proxyConfig)
 	case "vless":
-		return parser.ParseVless(proxyName, proxyConfig)
+		return parser.GenerateVlessLink(proxyName, proxyConfig)
 	case "trojan":
-		return parser.ParseTrojan(proxyName, proxyConfig)
+		return parser.GenerateTrojanLink(proxyName, proxyConfig)
 	case "shadowsocks", "ss":
-		return parser.ParseShadowsocks(proxyName, proxyConfig)
+		return parser.GenerateShadowsocksLink(proxyName, proxyConfig)
 	case "shadowsocksr", "ssr":
-		return parser.ParseSsr(proxyName, proxyConfig)
+		return parser.GenerateSSRLink(proxyName, proxyConfig)
 	case "hysteria2":
-		return parser.ParseHysteria2(proxyName, proxyConfig)
+		return parser.GenerateHysteria2Link(proxyName, proxyConfig)
 	default:
 		return proxyName, nil
 	}

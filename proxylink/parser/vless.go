@@ -6,122 +6,109 @@ import (
 	"strconv"
 )
 
-// 将clash格式的节点转换为vless格式的节点
-func ParseVless(proxyName string,data map[string]any) (string, error) {
-	// 检查必要参数
-	uuid, ok := data["uuid"].(string)
-	if !ok || uuid == "" {
-		return "", fmt.Errorf("缺少必要参数: uuid")
+// ================== Vless ==================
+func GenerateVlessLink(proxyName string, config map[string]any) (string, error) {
+	base := getBaseParams(config, "uuid")
+	if base == "" {
+		return proxyName, fmt.Errorf("missing required parameters")
 	}
 
-	server, ok := data["server"].(string)
-	if !ok || server == "" {
-		return "", fmt.Errorf("缺少必要参数: server")
-	}
-
-	port, ok := data["port"].(int)
-	if !ok {
-		// 尝试将其他类型转换为int
-		portValue, ok := data["port"]
-		if !ok {
-			return "", fmt.Errorf("缺少必要参数: port")
-		}
-
-		switch v := portValue.(type) {
-		case float64:
-			port = int(v)
-		case string:
-			var err error
-			port, err = strconv.Atoi(v)
-			if err != nil {
-				return "", fmt.Errorf("端口格式不正确")
-			}
-		default:
-			return "", fmt.Errorf("端口格式不正确")
-		}
-	}
-
-	// 构建查询参数
 	params := url.Values{}
 
-	// 设置网络类型
-	network, _ := data["network"].(string)
-	if network == "" {
-		network = "tcp"
-	}
-	params.Set("type", network)
-
-	// 设置TLS
-	tls, ok := data["tls"].(bool)
-	if ok && tls {
-		params.Set("security", "tls")
-
-		// 设置SNI
-		if sni, ok := data["servername"].(string); ok && sni != "" {
-			params.Set("sni", sni)
-		}
-
-		// 设置指纹
-		if fp, ok := data["client-fingerprint"].(string); ok && fp != "" {
-			params.Set("fp", fp)
-		}
-	} else {
-		params.Set("security", "none")
-	}
-
-	// 设置流控
-	if flow, ok := data["flow"].(string); ok && flow != "" {
+	// Flow参数
+	if flow := getString(config, "flow"); flow != "" {
 		params.Set("flow", flow)
 	}
 
-	// 设置UDP
-	if udp, ok := data["udp"].(bool); ok && udp {
+	if udp := getBool(config, "udp"); udp {
 		params.Set("udp", "true")
 	}
+	if mode := getString(config, "mode"); mode != "" {
+		params.Set("mode", mode)
+	}
+	// TLS处理
+	handleTLSConfig(config, params)
 
-	// 处理ws配置
-	if network == "ws" {
-		if wsOpts, ok := data["ws-opts"].(map[string]any); ok {
-			if path, ok := wsOpts["path"].(string); ok && path != "" {
-				params.Set("path", path)
-			}
-
-			if headers, ok := wsOpts["headers"].(map[string]string); ok {
-				if host, ok := headers["Host"]; ok && host != "" {
-					params.Set("host", host)
-				}
-			}
+	// 网络类型处理
+	switch network := getString(config, "network"); network {
+	case "ws", "grpc":
+		params.Set("type", network)
+		handleTransportParams(config, network, params)
+	case "tcp":
+		fallthrough
+	default:
+		params.Set("type", network)
+		if peer := getString(config, "sni"); peer != "" {
+			params.Set("peer", peer)
 		}
 	}
 
-	// 处理reality配置
-	if realityOpts, ok := data["reality-opts"].(map[string]string); ok {
-		if pbk, ok := realityOpts["public-key"]; ok && pbk != "" {
-			params.Set("pbk", pbk)
-		}
+	return buildURL("vless", base, proxyName, params), nil
+}
 
-		if sid, ok := realityOpts["short-id"]; ok && sid != "" {
-			params.Set("sid", sid)
+// 将vless格式的节点转换为clash的节点
+func ParseVless(data string) (map[string]any, error) {
+	parsedURL, err := url.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("解析失败: %v", err)
+	}
+
+	if parsedURL.Scheme != "vless" {
+		return nil, fmt.Errorf("不是vless格式")
+	}
+
+	port, err := strconv.Atoi(parsedURL.Port())
+	if err != nil {
+		return nil, fmt.Errorf("格式错误: 端口格式不正确")
+	}
+
+	// 解析参数
+	query := parsedURL.Query()
+	sni := query.Get("sni")
+	path := query.Get("path")
+	host := query.Get("host")
+	pbk := query.Get("pbk")
+	sid := query.Get("sid")
+	fp := query.Get("fp")
+	serviceName := query.Get("serviceName")
+
+	// 构建 clash 格式的代理配置，这里边也加上了URI用到的参数，方便后边解析
+	proxy := map[string]any{
+		"name":               parsedURL.Fragment,
+		"type":               "vless",
+		"server":             parsedURL.Hostname(),
+		"port":               port,
+		"uuid":               parsedURL.User.String(),
+		"network":            query.Get("type"),
+		"tls":                query.Get("security") != "none",
+		"udp":                query.Get("udp") == "true",
+		"servername":         sni,
+		"flow":               query.Get("flow"),
+		"mode":               query.Get("mode"),
+		"client-fingerprint": fp,
+	}
+
+	if path != "" || host != "" {
+		wsOpts := make(map[string]any, 2)
+		wsOpts["path"] = path
+		if host != "" {
+			headers := map[string]string{"Host": host}
+			wsOpts["headers"] = headers
+		}
+		proxy["ws-opts"] = wsOpts
+	}
+
+	if pbk != "" || sid != "" {
+		proxy["reality-opts"] = map[string]string{
+			"public-key": pbk,
+			"short-id":   sid,
 		}
 	}
 
-	// 处理grpc配置
-	if network == "grpc" {
-		if grpcOpts, ok := data["grpc-opts"].(map[string]string); ok {
-			if serviceName, ok := grpcOpts["grpc-service-name"]; ok && serviceName != "" {
-				params.Set("serviceName", serviceName)
-			}
+	if serviceName != "" {
+		proxy["grpc-opts"] = map[string]string{
+			"grpc-service-name": serviceName,
 		}
 	}
-
-	// 构建完整URL
-	resultURL := url.URL{
-		Scheme:   "vless",
-		User:     url.User(uuid),
-		Host:     fmt.Sprintf("%s:%d", server, port),
-		RawQuery: params.Encode(),
-		Fragment: fmt.Sprintf("%v", data["name"]),
-	}
-
-	return resultURL.String(), nil
+	return proxy, nil
 }
