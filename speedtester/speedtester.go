@@ -507,44 +507,38 @@ func checkCNNetwork(proxy *CProxy, client *http.Client) bool {
 				}
 			}
 		}
-		return checkCnWall(server, port) && checkCnWallBy204(client)
+		// fmt.Println(checkCnWallBy204(client))
+		return checkCnWall(server, port, client)
 	}
 	return checkCnWallBy204(client)
 }
 func checkCnWallBy204(client *http.Client) bool {
-	url := "https://220.185.180.69/generate_204"
+
+	url := "https://www.apple.com/library/test/success.html"
 	method := "GET"
 
-	payload := &bytes.Buffer{}
+	req, _ := http.NewRequest(method, url, nil)
 
-	req, _ := http.NewRequest(method, url, payload)
-
-	req.Header.Set("Host", "connectivitycheck.platform.hicloud.com")
+	req.Header.Set("Host", "www.apple.com")
 	res, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer res.Body.Close()
+	return res.StatusCode == http.StatusOK
 
-	return res.StatusCode == http.StatusNoContent
 }
 
-func checkCnWall(ip string, port string) bool {
+func checkCnWall(ip string, port string, client *http.Client) bool {
 	url := "https://api.ycwxgzs.com/ipcheck/index.php"
 	method := "POST"
-	// fmt.Println()
-	// fmt.Println("ip:", ip)
-	// fmt.Println("port:", port)
+
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
 	_ = writer.WriteField("ip", ip)
 	_ = writer.WriteField("port", port)
 	_ = writer.Close()
 
-	// 设置6秒超时时间
-	client := &http.Client{
-		Timeout: 6 * time.Second,
-	}
 	req, _ := http.NewRequest(method, url, payload)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	res, err := client.Do(req)
@@ -570,7 +564,7 @@ func checkCnWall(ip string, port string) bool {
 	if err := json.Unmarshal(body, &response); err != nil {
 		return false
 	}
-
+	// fmt.Println("response:", response)
 	// 检查TCP或ICMP是否包含"不可用"字样
 	return !strings.Contains(response.Tcp, "不可用")
 }
