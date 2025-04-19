@@ -446,7 +446,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		go func() {
 			defer wg.Done()
 			// 随机休眠10-210毫秒
-			time.Sleep(time.Duration(rand.Intn(200)+10*i) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 
 			start := time.Now()
 			// resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL)
@@ -548,9 +548,9 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 	_ = writer.WriteField("ip", ip)
 	_ = writer.WriteField("port", port)
 	_ = writer.Close()
-	client1 := &http.Client{}
+
 	req, _ := http.NewRequest(method, url, payload)
-	res, err := client1.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return false
 	}
