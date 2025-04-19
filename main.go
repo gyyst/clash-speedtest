@@ -66,11 +66,11 @@ func calculateWeightedScore(results []*speedtester.Result, index int) float64 {
 		uploadWeight = 0        // 上传速度权重
 	} else {
 		// 正常模式下考虑所有指标
-		latencyWeight = 0.30    // 延迟权重
+		latencyWeight = 0.35    // 延迟权重
 		jitterWeight = 0.15     // 抖动权重
 		packetLossWeight = 0.15 // 丢包率权重
 		downloadWeight = 0.30   // 下载速度权重
-		uploadWeight = 0.10     // 上传速度权重
+		uploadWeight = 0.05     // 上传速度权重
 	}
 
 	// 创建各项指标的排名映射

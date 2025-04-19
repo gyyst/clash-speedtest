@@ -73,6 +73,9 @@ type RawConfig struct {
 	Proxies   []map[string]any          `yaml:"proxies"`
 }
 
+func (st *SpeedTester) GetDefaultClient() *http.Client {
+	return &http.Client{}
+}
 func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 	allProxies := make(map[string]*CProxy)
 
@@ -443,10 +446,11 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		go func() {
 			defer wg.Done()
 			// 随机休眠10-210毫秒
-			time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(200)+10*i) * time.Millisecond)
 
 			start := time.Now()
-			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
+			// resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL)
+			resp, err := client.Get("http://www.gstatic.com/generate_204")
 			if err != nil {
 				failedPingsMutex.Lock()
 				failedPings++
@@ -494,24 +498,29 @@ type downloadResult struct {
 
 func (st *SpeedTester) checkCNNetwork(proxy *CProxy) bool {
 	// 获取服务器地址,如果是域名则解析IP
-	// server := getString(proxy.Config, "server")
-	// port := getString(proxy.Config, "port")
-	// if server != "" {
-	// 	// 检查是否为域名
-	// 	if ips, err := net.LookupIP(server); err == nil {
-	// 		// 如果能成功解析IP,则使用第一个IP地址
-	// 		for _, ip := range ips {
-	// 			if ipv4 := ip.To4(); ipv4 != nil {
-	// 				server = ipv4.String()
-	// 				break
-	// 			}
-	// 		}
-	// 	}
-	// 	// fmt.Println(checkCnWallBy204(client))
-	// 	client1 := st.createClient(proxy)
-	// 	client2 := st.createClient(proxy)
-	// 	return checkCnWall(server, port, client1) && checkCnWallBy204(client2)
-	// }
+	server := getString(proxy.Config, "server")
+	port := getString(proxy.Config, "port")
+	if server != "" {
+		// 检查是否为域名
+		r := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{}
+				return d.DialContext(ctx, "udp", "8.8.8.8:53")
+			},
+		}
+		if ips, err := r.LookupIPAddr(context.Background(), server); err == nil {
+			// 如果能成功解析IP,则使用第一个IP地址
+			for _, ip := range ips {
+				if ipv4 := ip.IP.To4(); ipv4 != nil {
+					server = ipv4.String()
+					break
+				}
+			}
+		}
+		// fmt.Println(checkCnWallBy204(client))
+		return checkCnWall(server, port, st.GetDefaultClient())
+	}
 	client := st.createClient(proxy)
 	return checkCnWallBy204(client)
 }
@@ -539,10 +548,9 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 	_ = writer.WriteField("ip", ip)
 	_ = writer.WriteField("port", port)
 	_ = writer.Close()
-
+	client1 := &http.Client{}
 	req, _ := http.NewRequest(method, url, payload)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	res, err := client.Do(req)
+	res, err := client1.Do(req)
 	if err != nil {
 		return false
 	}
