@@ -502,17 +502,10 @@ func (st *SpeedTester) checkCNNetwork(proxy *CProxy) bool {
 	port := getString(proxy.Config, "port")
 	if server != "" {
 		// 检查是否为域名
-		r := &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				d := net.Dialer{}
-				return d.DialContext(ctx, "udp", "8.8.8.8:53")
-			},
-		}
-		if ips, err := r.LookupIPAddr(context.Background(), server); err == nil {
+		if ips, err := net.LookupIP(server); err == nil {
 			// 如果能成功解析IP,则使用第一个IP地址
 			for _, ip := range ips {
-				if ipv4 := ip.IP.To4(); ipv4 != nil {
+				if ipv4 := ip.To4(); ipv4 != nil {
 					server = ipv4.String()
 					break
 				}
@@ -521,6 +514,7 @@ func (st *SpeedTester) checkCNNetwork(proxy *CProxy) bool {
 		// fmt.Println(checkCnWallBy204(client))
 		return checkCnWall(server, port, st.GetDefaultClient())
 	}
+
 	client := st.createClient(proxy)
 	return checkCnWallBy204(client)
 }
