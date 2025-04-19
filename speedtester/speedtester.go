@@ -465,7 +465,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 	}
 
 	// 测试server的中国连通性
-	if !checkCNNetwork(proxy, client) {
+	if !st.checkCNNetwork(proxy) {
 		// 直接返回表示中国连通性失败的结果
 		return &latencyResult{
 			packetLoss: 100, // 设置为100%丢包率表示完全不可用
@@ -492,41 +492,42 @@ type downloadResult struct {
 	duration time.Duration
 }
 
-func checkCNNetwork(proxy *CProxy, client *http.Client) bool {
+func (st *SpeedTester) checkCNNetwork(proxy *CProxy) bool {
 	// 获取服务器地址,如果是域名则解析IP
-	server := getString(proxy.Config, "server")
-	port := getString(proxy.Config, "port")
-	if server != "" {
-		// 检查是否为域名
-		if ips, err := net.LookupIP(server); err == nil {
-			// 如果能成功解析IP,则使用第一个IP地址
-			for _, ip := range ips {
-				if ipv4 := ip.To4(); ipv4 != nil {
-					server = ipv4.String()
-					break
-				}
-			}
-		}
-		// fmt.Println(checkCnWallBy204(client))
-		return checkCnWall(server, port, client)
-	}
+	// server := getString(proxy.Config, "server")
+	// port := getString(proxy.Config, "port")
+	// if server != "" {
+	// 	// 检查是否为域名
+	// 	if ips, err := net.LookupIP(server); err == nil {
+	// 		// 如果能成功解析IP,则使用第一个IP地址
+	// 		for _, ip := range ips {
+	// 			if ipv4 := ip.To4(); ipv4 != nil {
+	// 				server = ipv4.String()
+	// 				break
+	// 			}
+	// 		}
+	// 	}
+	// 	// fmt.Println(checkCnWallBy204(client))
+	// 	client1 := st.createClient(proxy)
+	// 	client2 := st.createClient(proxy)
+	// 	return checkCnWall(server, port, client1) && checkCnWallBy204(client2)
+	// }
+	client := st.createClient(proxy)
 	return checkCnWallBy204(client)
 }
 func checkCnWallBy204(client *http.Client) bool {
-
-	url := "https://www.apple.com/library/test/success.html"
+	url := "https://connectivitycheck.platform.hicloud.com/generate_204"
 	method := "GET"
 
 	req, _ := http.NewRequest(method, url, nil)
 
-	req.Header.Set("Host", "www.apple.com")
+	req.Header.Set("Host", "connectivitycheck.platform.hicloud.com")
 	res, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer res.Body.Close()
-	return res.StatusCode == http.StatusOK
-
+	return res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNoContent
 }
 
 func checkCnWall(ip string, port string, client *http.Client) bool {

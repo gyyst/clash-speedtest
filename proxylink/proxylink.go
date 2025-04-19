@@ -1,6 +1,7 @@
 package proxylink
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/faceair/clash-speedtest/proxylink/parser"
@@ -19,11 +20,16 @@ func GenerateProxyLink(proxyName string, proxyType string, proxyConfig map[strin
 		return parser.GenerateShadowsocksLink(proxyName, proxyConfig)
 	case "shadowsocksr", "ssr":
 		return parser.GenerateSSRLink(proxyName, proxyConfig)
-	case "hysteria2":
+	case "hysteria2", "hy2":
 		return parser.GenerateHysteria2Link(proxyName, proxyConfig)
-	case "tuic5":
+	case "tuic", "tuic5":
 		return parser.GenerateTuicLink(proxyName, proxyConfig)
 	default:
 		return proxyName, nil
 	}
+}
+
+// ParseProxiesJSON 解析JSON格式的代理配置并返回URL格式
+func ParseProxiesJSON(data []byte) (*bytes.Buffer, error) {
+	return parser.GenUrls(data)
 }

@@ -591,8 +591,11 @@ func saveConfig(results []*speedtester.Result) error {
 		}
 
 		proxyName := newName
+		// 更新代理配置中的名称
+		// result.ProxyConfig["name"] = proxyName
+
 		link, err := proxylink.GenerateProxyLink(proxyName, result.ProxyType, result.ProxyConfig)
-		
+
 		if err != nil {
 			// 如果生成链接失败，使用代理名称
 			link = proxyName
@@ -607,7 +610,28 @@ func saveConfig(results []*speedtester.Result) error {
 		lines = append(lines, link)
 	}
 
-	// 将所有行合并为一个字符串，每行一个代理链接
+	// // 尝试使用ParseProxiesJSON方法批量生成URLs
+	// // 将filteredResults转换为JSON格式
+	// proxiesJSON := make([]map[string]any, 0, len(filteredResults))
+	// for _, result := range filteredResults {
+	// 	// 确保每个代理配置都有name字段
+	// 	proxyCfg := result.ProxyConfig
+	// 	proxiesJSON = append(proxiesJSON, proxyCfg)
+	// }
+
+	// // 将代理配置数组转换为JSON字节数组
+	// jsonData, err := json.Marshal(proxiesJSON)
+	// if err == nil {
+	// 	// 使用ParseProxiesJSON生成URL格式
+	// 	buffer, err := proxylink.ParseProxiesJSON(jsonData)
+	// 	if err == nil && buffer.Len() > 0 {
+	// 		// 如果成功生成URLs，使用生成的结果替代之前的lines
+	// 		txtData := buffer.String()
+	// 		return os.WriteFile(*outputPath, []byte(txtData), 0o644)
+	// 	}
+	// }
+
+	// 如果批量生成失败，使用之前生成的单个链接
 	txtData := strings.Join(lines, "\n")
 
 	// 写入文件
