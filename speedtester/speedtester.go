@@ -449,8 +449,8 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
 
 			start := time.Now()
-			// resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL)
-			resp, err := client.Get("http://www.gstatic.com/generate_204")
+			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
+			// resp, err := client.Get("http://www.gstatic.com/generate_204")
 			if err != nil {
 				failedPingsMutex.Lock()
 				failedPings++
@@ -632,11 +632,29 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 				if port, err := strconv.ParseUint(port, 10, 16); err == nil {
 					u16Port = uint16(port)
 				}
-				return proxy.DialContext(ctx, &constant.Metadata{
+				
+				// Create metadata with a larger buffer size hint for VLESS Vision protocol
+				metadata := &constant.Metadata{
 					Host:    host,
 					DstPort: u16Port,
-				})
+				}
+				
+				// Check if this is a VLESS proxy with Vision protocol
+				if cProxy, ok := proxy.(*CProxy); ok && cProxy.Type() == constant.Vless {
+					if flow, ok := cProxy.Config["flow"].(string); ok && strings.Contains(strings.ToLower(flow), "vision") {
+						// Set a special option to increase buffer size for Vision protocol
+						metadata.SpecialProxy = "vision-large-buffer"
+					}
+				}
+				
+				return proxy.DialContext(ctx, metadata)
 			},
+			// Add these settings to improve stability
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     false,
 		},
 	}
 }
