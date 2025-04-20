@@ -544,6 +544,7 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 	_ = writer.Close()
 
 	req, _ := http.NewRequest(method, url, payload)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	res, err := client.Do(req)
 	if err != nil {
 		return false
@@ -553,7 +554,7 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 	if err != nil {
 		return false
 	}
-
+	// fmt.Println("\nbody", string(body))
 	// 尝试解析新的JSON响应格式
 	type NetworkCheckResponse struct {
 		Ip   string `json:"ip"`
@@ -567,7 +568,7 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 	if err := json.Unmarshal(body, &response); err != nil {
 		return false
 	}
-	// fmt.Println("response:", response)
+	// fmt.Println("\nresponse", response)
 	// 检查TCP或ICMP是否包含"不可用"字样
 	return !strings.Contains(response.Tcp, "不可用")
 }
@@ -632,13 +633,13 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 				if port, err := strconv.ParseUint(port, 10, 16); err == nil {
 					u16Port = uint16(port)
 				}
-				
+
 				// Create metadata with a larger buffer size hint for VLESS Vision protocol
 				metadata := &constant.Metadata{
 					Host:    host,
 					DstPort: u16Port,
 				}
-				
+
 				// Check if this is a VLESS proxy with Vision protocol
 				if cProxy, ok := proxy.(*CProxy); ok && cProxy.Type() == constant.Vless {
 					if flow, ok := cProxy.Config["flow"].(string); ok && strings.Contains(strings.ToLower(flow), "vision") {
@@ -646,7 +647,7 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 						metadata.SpecialProxy = "vision-large-buffer"
 					}
 				}
-				
+
 				return proxy.DialContext(ctx, metadata)
 			},
 			// Add these settings to improve stability
