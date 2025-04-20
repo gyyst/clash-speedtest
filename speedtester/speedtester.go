@@ -74,7 +74,9 @@ type RawConfig struct {
 }
 
 func (st *SpeedTester) GetDefaultClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Timeout: 5 * time.Second,
+	}
 }
 func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 	allProxies := make(map[string]*CProxy)
