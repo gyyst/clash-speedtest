@@ -448,7 +448,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 		go func() {
 			defer wg.Done()
 			// 随机休眠10-210毫秒
-			time.Sleep(time.Duration(rand.Intn(200)+10) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(200)+10*i) * time.Millisecond)
 
 			start := time.Now()
 			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
