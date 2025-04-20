@@ -203,6 +203,9 @@ func handlePluginOpts(config map[string]any, plugin string) string {
 
 func buildURL(scheme string, auth string, fragment string, params url.Values) string {
 	encodedFragment := url.PathEscape(fragment)
+	if params.Encode() == "" {
+		return fmt.Sprintf("%s://%s#%s", scheme, auth, encodedFragment)
+	}
 	return fmt.Sprintf("%s://%s?%s#%s", scheme, auth, params.Encode(), encodedFragment)
 }
 
