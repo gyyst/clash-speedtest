@@ -29,16 +29,19 @@ import (
 )
 
 type Config struct {
-	ConfigPaths    string
-	FilterRegex    string
-	ServerURL      string
-	DownloadSize   int
-	UploadSize     int
-	Timeout        time.Duration
-	Concurrent     int
-	TestConcurrent int
-	UnlockTest     string
-	Fast           bool
+	ConfigPaths      string
+	FilterRegex      string
+	ServerURL        string
+	DownloadSize     int
+	UploadSize       int
+	Timeout          time.Duration
+	Concurrent       int
+	TestConcurrent   int
+	UnlockTest       string
+	Fast             bool
+	MaxLatency       time.Duration
+	MinDownloadSpeed float64
+	MinUploadSpeed   float64
 }
 
 type SpeedTester struct {
@@ -364,66 +367,77 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 	}
 
 	// 4. 并发进行下载和上传测试
-	// var wg sync.WaitGroup
-	downloadResults := make(chan *downloadResult, st.config.Concurrent)
 
-	// 计算每个并发连接的数据大小
-	downloadChunkSize := st.config.DownloadSize / st.config.Concurrent
-	uploadChunkSize := st.config.UploadSize / st.config.Concurrent
+	var wg1 sync.WaitGroup
 
-	// 启动下载测试
-	for i := 0; i < st.config.Concurrent; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			downloadResults <- st.testDownload(proxy, downloadChunkSize)
-		}()
-	}
-
-	uploadResults := make(chan *downloadResult, st.config.Concurrent)
-
-	// 启动上传测试
-	for i := 0; i < st.config.Concurrent; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			uploadResults <- st.testUpload(proxy, uploadChunkSize)
-		}()
-	}
-	wg.Wait()
-
-	// 5. 汇总结果
 	var totalDownloadBytes, totalUploadBytes int64
 	var totalDownloadTime, totalUploadTime time.Duration
 	var downloadCount, uploadCount int
 
-	for i := 0; i < st.config.Concurrent; i++ {
-		if dr := <-downloadResults; dr != nil {
-			totalDownloadBytes += dr.bytes
-			totalDownloadTime += dr.duration
-			downloadCount++
+	downloadChunkSize := st.config.DownloadSize / st.config.Concurrent
+	if downloadChunkSize > 0 {
+		downloadResults := make(chan *downloadResult, st.config.Concurrent)
+
+		for i := 0; i < st.config.Concurrent; i++ {
+			wg1.Add(1)
+			go func() {
+				defer wg.Done()
+				downloadResults <- st.testDownload(proxy, downloadChunkSize)
+			}()
+		}
+		wg1.Wait()
+
+		for i := 0; i < st.config.Concurrent; i++ {
+			if dr := <-downloadResults; dr != nil {
+				totalDownloadBytes += dr.bytes
+				totalDownloadTime += dr.duration
+				downloadCount++
+			}
+		}
+		close(downloadResults)
+
+		if downloadCount > 0 {
+			result.DownloadSize = float64(totalDownloadBytes)
+			result.DownloadTime = totalDownloadTime / time.Duration(downloadCount)
+			result.DownloadSpeed = float64(totalDownloadBytes) / result.DownloadTime.Seconds()
+		}
+
+		if result.DownloadSpeed < st.config.MinDownloadSpeed {
+			return result
 		}
 	}
-	close(downloadResults)
 
-	for i := 0; i < st.config.Concurrent; i++ {
-		if ur := <-uploadResults; ur != nil {
-			totalUploadBytes += ur.bytes
-			totalUploadTime += ur.duration
-			uploadCount++
+	uploadChunkSize := st.config.UploadSize / st.config.Concurrent
+	if uploadChunkSize > 0 {
+		uploadResults := make(chan *downloadResult, st.config.Concurrent)
+
+		for i := 0; i < st.config.Concurrent; i++ {
+			wg1.Add(1)
+			go func() {
+				defer wg.Done()
+				uploadResults <- st.testUpload(proxy, uploadChunkSize)
+			}()
 		}
-	}
-	close(uploadResults)
+		wg1.Wait()
 
-	if downloadCount > 0 {
-		result.DownloadSize = float64(totalDownloadBytes)
-		result.DownloadTime = totalDownloadTime / time.Duration(downloadCount)
-		result.DownloadSpeed = float64(totalDownloadBytes) / result.DownloadTime.Seconds()
-	}
-	if uploadCount > 0 {
-		result.UploadSize = float64(totalUploadBytes)
-		result.UploadTime = totalUploadTime / time.Duration(uploadCount)
-		result.UploadSpeed = float64(totalUploadBytes) / result.UploadTime.Seconds()
+		for i := 0; i < st.config.Concurrent; i++ {
+			if ur := <-uploadResults; ur != nil {
+				totalUploadBytes += ur.bytes
+				totalUploadTime += ur.duration
+				uploadCount++
+			}
+		}
+		close(uploadResults)
+
+		if uploadCount > 0 {
+			result.UploadSize = float64(totalUploadBytes)
+			result.UploadTime = totalUploadTime / time.Duration(uploadCount)
+			result.UploadSpeed = float64(totalUploadBytes) / result.UploadTime.Seconds()
+		}
+
+		if result.UploadSpeed < st.config.MinUploadSpeed {
+			return result
+		}
 	}
 
 	return result
@@ -576,7 +590,7 @@ func checkCnWall(ip string, port string, client *http.Client) bool {
 }
 
 func (st *SpeedTester) testDownload(proxy constant.Proxy, size int) *downloadResult {
-	client := st.createClient(proxy)
+	client := st.createClientWithTimeout(proxy, st.config.Timeout)
 	start := time.Now()
 
 	resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=%d", st.config.ServerURL, size))
@@ -598,7 +612,7 @@ func (st *SpeedTester) testDownload(proxy constant.Proxy, size int) *downloadRes
 }
 
 func (st *SpeedTester) testUpload(proxy constant.Proxy, size int) *downloadResult {
-	client := st.createClient(proxy)
+	client := st.createClientWithTimeout(proxy, st.config.Timeout)
 	reader := NewZeroReader(size)
 
 	start := time.Now()
@@ -622,9 +636,9 @@ func (st *SpeedTester) testUpload(proxy constant.Proxy, size int) *downloadResul
 	}
 }
 
-func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
+func (st *SpeedTester) createClientWithTimeout(proxy constant.Proxy, timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout: st.config.Timeout,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, err := net.SplitHostPort(addr)
@@ -661,7 +675,9 @@ func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
 		},
 	}
 }
-
+func (st *SpeedTester) createClient(proxy constant.Proxy) *http.Client {
+	return st.createClientWithTimeout(proxy, st.config.Timeout)
+}
 func calculateLatencyStats(latencies []time.Duration, failedPings int) *latencyResult {
 	result := &latencyResult{
 		packetLoss: float64(failedPings) / 20.0 * 100,
