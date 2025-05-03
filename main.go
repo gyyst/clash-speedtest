@@ -193,16 +193,19 @@ func main() {
 	}
 
 	speedTester := speedtester.New(&speedtester.Config{
-		ConfigPaths:    *configPathsConfig,
-		FilterRegex:    *filterRegexConfig,
-		ServerURL:      *serverURL,
-		DownloadSize:   *downloadSize,
-		UploadSize:     *uploadSize,
-		Timeout:        *timeout,
-		Concurrent:     *concurrent,
+		ConfigPaths:        *configPathsConfig,
+		FilterRegex:        *filterRegexConfig,
+		ServerURL:          *serverURL,
+		DownloadSize:       *downloadSize,
+		UploadSize:         *uploadSize,
+		Timeout:            *timeout,
+		Concurrent:         *concurrent,
 		TestConcurrent: *testConcurrent,
 		UnlockTest:     *unlockTest,
 		Fast:           *fastMode,
+		MaxLatency:       *maxLatency,
+		MinDownloadSpeed: *minDownloadSpeed,
+		MinUploadSpeed:   *minUploadSpeed,
 	})
 
 	allProxies, err := speedTester.LoadProxies()
