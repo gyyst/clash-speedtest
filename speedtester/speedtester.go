@@ -381,7 +381,7 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 		for i := 0; i < st.config.Concurrent; i++ {
 			wg1.Add(1)
 			go func() {
-				defer wg.Done()
+				defer wg1.Done()
 				downloadResults <- st.testDownload(proxy, downloadChunkSize)
 			}()
 		}
@@ -414,7 +414,7 @@ func (st *SpeedTester) testProxy(name string, proxy *CProxy) *Result {
 		for i := 0; i < st.config.Concurrent; i++ {
 			wg1.Add(1)
 			go func() {
-				defer wg.Done()
+				defer wg1.Done()
 				uploadResults <- st.testUpload(proxy, uploadChunkSize)
 			}()
 		}
