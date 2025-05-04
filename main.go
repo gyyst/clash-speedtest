@@ -73,115 +73,177 @@ func calculateWeightedScore(results []*speedtester.Result, index int) float64 {
 		uploadWeight = 0.05     // 上传速度权重
 	}
 
-	// 创建各项指标的排名映射
-	latencyRanks := make(map[int]int)
-	jitterRanks := make(map[int]int)
-	packetLossRanks := make(map[int]int)
-	downloadRanks := make(map[int]int)
-	uploadRanks := make(map[int]int)
+	// 创建各项指标的得分映射
+	latencyScores := make(map[int]float64)
+	jitterScores := make(map[int]float64)
+	packetLossScores := make(map[int]float64)
+	downloadScores := make(map[int]float64)
+	uploadScores := make(map[int]float64)
 
-	// 计算延迟排名（值越小排名越高）
-	validLatencies := make([]struct{ idx, val int }, 0)
-	for i, r := range results {
+	// 计算延迟得分（值越小得分越高）
+	// 首先找出有效的最大和最小延迟值
+	minLatency, maxLatency := float64(0), float64(0)
+	hasValidLatency := false
+	for _, r := range results {
 		if r.Latency > 0 { // 只考虑有效延迟
-			validLatencies = append(validLatencies, struct{ idx, val int }{i, int(r.Latency)})
-		}
-	}
-	sort.Slice(validLatencies, func(i, j int) bool {
-		return validLatencies[i].val < validLatencies[j].val
-	})
-	for rank, item := range validLatencies {
-		latencyRanks[item.idx] = rank + 1
-	}
-	// 无效延迟的节点排在最后
-	for i := range results {
-		if _, exists := latencyRanks[i]; !exists {
-			latencyRanks[i] = len(validLatencies) + 1
+			if !hasValidLatency {
+				minLatency = float64(r.Latency)
+				maxLatency = float64(r.Latency)
+				hasValidLatency = true
+			} else {
+				if float64(r.Latency) < minLatency {
+					minLatency = float64(r.Latency)
+				}
+				if float64(r.Latency) > maxLatency {
+					maxLatency = float64(r.Latency)
+				}
+			}
 		}
 	}
 
-	// 计算抖动排名（值越小排名越高）
-	validJitters := make([]struct{ idx, val int }, 0)
+	// 计算延迟得分
+	latencyRange := maxLatency - minLatency
 	for i, r := range results {
+		if r.Latency > 0 && hasValidLatency && latencyRange > 0 {
+			// 归一化得分：0是最差，1是最好
+			latencyScores[i] = 1.0 - (float64(r.Latency)-minLatency)/latencyRange
+		} else {
+			// 无效延迟给予最低分
+			latencyScores[i] = 0.0
+		}
+	}
+
+	// 计算抖动得分（值越小得分越高）
+	minJitter, maxJitter := float64(0), float64(0)
+	hasValidJitter := false
+	for _, r := range results {
 		if r.Jitter > 0 { // 只考虑有效抖动
-			validJitters = append(validJitters, struct{ idx, val int }{i, int(r.Jitter)})
+			if !hasValidJitter {
+				minJitter = float64(r.Jitter)
+				maxJitter = float64(r.Jitter)
+				hasValidJitter = true
+			} else {
+				if float64(r.Jitter) < minJitter {
+					minJitter = float64(r.Jitter)
+				}
+				if float64(r.Jitter) > maxJitter {
+					maxJitter = float64(r.Jitter)
+				}
+			}
 		}
 	}
-	sort.Slice(validJitters, func(i, j int) bool {
-		return validJitters[i].val < validJitters[j].val
-	})
-	for rank, item := range validJitters {
-		jitterRanks[item.idx] = rank + 1
-	}
-	// 无效抖动的节点排在最后
-	for i := range results {
-		if _, exists := jitterRanks[i]; !exists {
-			jitterRanks[i] = len(validJitters) + 1
+
+	// 计算抖动得分
+	jitterRange := maxJitter - minJitter
+	for i, r := range results {
+		if r.Jitter > 0 && hasValidJitter && jitterRange > 0 {
+			// 归一化得分：0是最差，1是最好
+			jitterScores[i] = 1.0 - (float64(r.Jitter)-minJitter)/jitterRange
+		} else {
+			// 无效抖动给予最低分
+			jitterScores[i] = 0.0
 		}
 	}
 
-	// 计算丢包率排名（值越小排名越高）
-	packetLossItems := make([]struct {
-		idx int
-		val float64
-	}, 0)
+	// 计算丢包率得分（值越小得分越高）
+	minPacketLoss, maxPacketLoss := float64(0), float64(0)
+	hasValidPacketLoss := false
+	for _, r := range results {
+		if !hasValidPacketLoss {
+			minPacketLoss = r.PacketLoss
+			maxPacketLoss = r.PacketLoss
+			hasValidPacketLoss = true
+		} else {
+			if r.PacketLoss < minPacketLoss {
+				minPacketLoss = r.PacketLoss
+			}
+			if r.PacketLoss > maxPacketLoss {
+				maxPacketLoss = r.PacketLoss
+			}
+		}
+	}
+
+	// 计算丢包率得分
+	packetLossRange := maxPacketLoss - minPacketLoss
 	for i, r := range results {
-		packetLossItems = append(packetLossItems, struct {
-			idx int
-			val float64
-		}{i, r.PacketLoss})
-	}
-	sort.Slice(packetLossItems, func(i, j int) bool {
-		return packetLossItems[i].val < packetLossItems[j].val
-	})
-	for rank, item := range packetLossItems {
-		packetLossRanks[item.idx] = rank + 1
+		if hasValidPacketLoss && packetLossRange > 0 {
+			// 归一化得分：0是最差，1是最好
+			packetLossScores[i] = 1.0 - (r.PacketLoss-minPacketLoss)/packetLossRange
+		} else {
+			// 如果所有节点丢包率相同，则都给满分
+			packetLossScores[i] = 1.0
+		}
 	}
 
-	// 计算下载速度排名（值越大排名越高）
-	downloadItems := make([]struct {
-		idx int
-		val float64
-	}, 0)
+	// 计算下载速度得分（值越大得分越高）
+	minDownload, maxDownload := float64(0), float64(0)
+	hasValidDownload := false
+	for _, r := range results {
+		if !hasValidDownload {
+			minDownload = r.DownloadSpeed
+			maxDownload = r.DownloadSpeed
+			hasValidDownload = true
+		} else {
+			if r.DownloadSpeed < minDownload {
+				minDownload = r.DownloadSpeed
+			}
+			if r.DownloadSpeed > maxDownload {
+				maxDownload = r.DownloadSpeed
+			}
+		}
+	}
+
+	// 计算下载速度得分
+	downloadRange := maxDownload - minDownload
 	for i, r := range results {
-		downloadItems = append(downloadItems, struct {
-			idx int
-			val float64
-		}{i, r.DownloadSpeed})
-	}
-	sort.Slice(downloadItems, func(i, j int) bool {
-		return downloadItems[i].val > downloadItems[j].val // 注意这里是降序排列
-	})
-	for rank, item := range downloadItems {
-		downloadRanks[item.idx] = rank + 1
+		if hasValidDownload && downloadRange > 0 {
+			// 归一化得分：0是最差，1是最好
+			downloadScores[i] = (r.DownloadSpeed - minDownload) / downloadRange
+		} else {
+			// 如果所有节点下载速度相同，则都给满分
+			downloadScores[i] = 1.0
+		}
 	}
 
-	// 计算上传速度排名（值越大排名越高）
-	uploadItems := make([]struct {
-		idx int
-		val float64
-	}, 0)
+	// 计算上传速度得分（值越大得分越高）
+	minUpload, maxUpload := float64(0), float64(0)
+	hasValidUpload := false
+	for _, r := range results {
+		if !hasValidUpload {
+			minUpload = r.UploadSpeed
+			maxUpload = r.UploadSpeed
+			hasValidUpload = true
+		} else {
+			if r.UploadSpeed < minUpload {
+				minUpload = r.UploadSpeed
+			}
+			if r.UploadSpeed > maxUpload {
+				maxUpload = r.UploadSpeed
+			}
+		}
+	}
+
+	// 计算上传速度得分
+	uploadRange := maxUpload - minUpload
 	for i, r := range results {
-		uploadItems = append(uploadItems, struct {
-			idx int
-			val float64
-		}{i, r.UploadSpeed})
-	}
-	sort.Slice(uploadItems, func(i, j int) bool {
-		return uploadItems[i].val > uploadItems[j].val // 注意这里是降序排列
-	})
-	for rank, item := range uploadItems {
-		uploadRanks[item.idx] = rank + 1
+		if hasValidUpload && uploadRange > 0 {
+			// 归一化得分：0是最差，1是最好
+			uploadScores[i] = (r.UploadSpeed - minUpload) / uploadRange
+		} else {
+			// 如果所有节点上传速度相同，则都给满分
+			uploadScores[i] = 1.0
+		}
 	}
 
-	// 计算加权得分（排名越低得分越好）
-	totalScore := float64(latencyRanks[index])*latencyWeight +
-		float64(jitterRanks[index])*jitterWeight +
-		float64(packetLossRanks[index])*packetLossWeight +
-		float64(downloadRanks[index])*downloadWeight +
-		float64(uploadRanks[index])*uploadWeight
+	// 计算加权总分（得分越高越好）
+	totalScore := latencyScores[index]*latencyWeight +
+		jitterScores[index]*jitterWeight +
+		packetLossScores[index]*packetLossWeight +
+		downloadScores[index]*downloadWeight +
+		uploadScores[index]*uploadWeight
 
-	return totalScore
+	// 返回负值，因为排序时得分越低越好
+	return -totalScore
 }
 
 func main() {
@@ -270,9 +332,9 @@ func main() {
 					scoreI := calculateWeightedScore(results, i)
 					// 计算节点j的加权得分
 					scoreJ := calculateWeightedScore(results, j)
-					// 得分越低越好
+					// 得分越低越好（注意：calculateWeightedScore返回的是负值，所以这里用<比较）
 					if scoreI != scoreJ {
-						return scoreI <= scoreJ
+						return scoreI < scoreJ
 					}
 				}
 			}
