@@ -47,7 +47,13 @@ func GenerateVmessLink(proxyName string, config map[string]any) (string, error) 
 	}
 
 	// 处理SNI
-	vmess["sni"] = getString(config, "sni", "servername")
+	if sni := getString(config, "sni"); sni != "" {
+		vmess["sni"] = sni
+	} else if servername := getString(config, "servername"); servername != "" {
+		vmess["sni"] = servername
+	} else {
+		vmess["sni"] = ""
+	}
 
 	// TLS处理
 	if getBool(config, "tls") {
@@ -57,7 +63,11 @@ func GenerateVmessLink(proxyName string, config map[string]any) (string, error) 
 			vmess["alpn"] = strings.Join(alpn, ",")
 		}
 		// 处理指纹
-		vmess["fp"] = getString(config, "client-fingerprint", "chrome")
+		if fp := getString(config, "client-fingerprint"); fp != "" {
+			vmess["fp"] = fp
+		} else {
+			vmess["fp"] = "chrome"
+		}
 	} else {
 		vmess["tls"] = "none"
 	}
@@ -134,6 +144,10 @@ func ParseVmess(data string) (map[string]any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("格式错误: alterId格式不正确")
 		}
+	case nil:
+		aid = 0
+	default:
+		aid = 0
 	}
 
 	// 构建clash格式配置

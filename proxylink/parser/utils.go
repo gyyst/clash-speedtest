@@ -161,7 +161,11 @@ func handleHttpConfig(config map[string]any, vmess map[string]any) {
 
 func handleGrpcConfig(config map[string]any, vmess map[string]any) {
 	if opts, ok := config["grpc-opts"].(map[string]any); ok {
-		vmess["path"] = getString(opts, "grpc-service-name")
+		if serviceName := getString(opts, "grpc-service-name"); serviceName != "" {
+			vmess["path"] = serviceName
+		} else if serviceName := getString(opts, "serviceName"); serviceName != "" {
+			vmess["path"] = serviceName
+		}
 	}
 }
 

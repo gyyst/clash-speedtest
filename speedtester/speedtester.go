@@ -81,6 +81,7 @@ func (st *SpeedTester) GetDefaultClient() *http.Client {
 		Timeout: 5 * time.Second,
 	}
 }
+
 func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 	allProxies := make(map[string]*CProxy)
 
@@ -94,10 +95,12 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 				log.Warnln("failed to fetch config: %s", err)
 				continue
 			}
+
 			body, err = io.ReadAll(resp.Body)
 		} else {
 			body, err = os.ReadFile(configPath)
 		}
+
 		if err != nil {
 			log.Warnln("failed to read config: %s", err)
 			continue
@@ -106,10 +109,11 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 		rawCfg := &RawConfig{
 			Proxies: []map[string]any{},
 		}
+		// 预处理配置内容，将IPv6映射的IPv4地址转换为标准IPv4地址
+		body = preprocessIPv6MappedAddresses(body)
 		if err := yaml.Unmarshal(body, rawCfg); err != nil {
 			return nil, err
 		}
-
 		proxies := make(map[string]*CProxy)
 		proxiesConfig := rawCfg.Proxies
 		providersConfig := rawCfg.Providers
@@ -129,6 +133,7 @@ func (st *SpeedTester) LoadProxies() (map[string]*CProxy, error) {
 			}
 			proxies[proxy.Name()] = &CProxy{Proxy: proxy, Config: config}
 		}
+
 		for name, config := range providersConfig {
 			if name == provider.ReservedName {
 				return nil, fmt.Errorf("can not defined a provider called `%s`", provider.ReservedName)
@@ -797,4 +802,13 @@ func getString(m map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+func preprocessIPv6MappedAddresses(data []byte) []byte {
+	// 匹配IPv6映射的IPv4地址格式：::ffff:x.x.x.x
+	ipv6MappedRegex := regexp.MustCompile(`::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
+
+	// 将IPv6映射的IPv4地址替换为标准IPv4地址
+	result := ipv6MappedRegex.ReplaceAll(data, []byte("$1"))
+
+	return result
 }
