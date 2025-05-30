@@ -12,7 +12,7 @@ require (
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
-	github.com/ebitengine/purego v0.8.2 // indirect
+	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/enfein/mieru/v3 v3.13.0 // indirect
 	github.com/metacubex/bart v0.19.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.1 // indirect
