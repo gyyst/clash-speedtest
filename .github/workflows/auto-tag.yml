@@ -72,6 +72,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-      
+      - name: Set 'latest' tag
+        run: |
+          git tag -f latest ${{ env.NEW_VERSION }}
+          git push origin -f latest
+        shell: bash
       - name: Output new version
         run: echo "Successfully created and pushed tag ${{ env.NEW_VERSION }} and released with GoReleaser"
