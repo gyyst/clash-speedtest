@@ -804,11 +804,22 @@ func getString(m map[string]any, keys ...string) string {
 	return ""
 }
 func preprocessIPv6MappedAddresses(data []byte) []byte {
-	// 匹配IPv6映射的IPv4地址格式：::ffff:x.x.x.x
-	ipv6MappedRegex := regexp.MustCompile(`::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
+	// 将 data 解析为字符串
+	input := string(data)
 
-	// 将IPv6映射的IPv4地址替换为标准IPv4地址
-	result := ipv6MappedRegex.ReplaceAll(data, []byte("$1"))
+	// 使用正则表达式查找以 server: 开头的行，匹配 IPv6-mapped IPv4 地址
+	re := regexp.MustCompile(`server:\s*(::ffff:[\da-fA-F:.]+)`)
 
-	return result
+	// 使用 ReplaceAllStringFunc 包裹匹配值
+	output := re.ReplaceAllStringFunc(input, func(line string) string {
+		// 提取地址部分
+		parts := strings.SplitN(line, ": ", 2)
+		if len(parts) == 2 {
+			// 包裹地址部分
+			return parts[0] + ": \"" + parts[1] + "\""
+		}
+		return line
+	})
+
+	return []byte(output)
 }
