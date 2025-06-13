@@ -36,6 +36,7 @@ var (
 	unlockTest        = flag.String("unlock", "", "test streaming media unlock, support: netflix|chatgpt|disney|youtube|all")
 	fastMode          = flag.Bool("fast", false, "only test latency, skip download and upload speed test")
 	sortFields        = flag.String("sort", "weighted", "sort proxies by fields, support: latency|jitter|packet_loss|download|upload|weighted, multiple fields separated by comma, e.g. download,upload")
+	renameMode        = flag.String("rename", "overwrite", "rename mode for proxy names: add|overwrite|none")
 )
 
 const (
@@ -597,61 +598,120 @@ func saveConfig(results []*speedtester.Result) error {
 		originalName := result.ProxyName
 		newName := ""
 
-		// 添加国旗和国家信息
-		if result.IpInfoResult.Country != "" {
-			// 添加国旗
-			if result.IpInfoResult.CountryFlag != "" {
-				newName += result.IpInfoResult.CountryFlag
-			}
-			// 添加中文国家名称
-			if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
-				countryCount[chineseName] += 1
-				newName += chineseName
-				if countryCount[chineseName] >= 1 {
-					newName += fmt.Sprintf("%d", countryCount[chineseName])
-				}
-			}
-			// 添加风险信息
-			if result.IpInfoResult.RiskInfo != "" {
-				newName += " " + result.IpInfoResult.RiskInfo
-			}
-			// 添加地区信息
-			if result.IpInfoResult.Region != "" && result.IpInfoResult.Region != "N/A" {
-				newName += " " + result.IpInfoResult.Region
-			}
-			if result.IpInfoResult.City != "" && result.IpInfoResult.City != "N/A" {
-				newName += " " + result.IpInfoResult.City
-			}
-		} else {
-			// 如果没有国家信息，使用原始名称
+		// 根据rename模式处理节点名称
+		switch *renameMode {
+		case "none":
+			// 不重命名，使用原始名称
 			newName = originalName
-		}
-
-		// 添加下载和上传速度信息（非Fast模式下）
-		if !*fastMode {
-			// 格式化下载和上传速度
-			downloadSpeedStr := result.FormatDownloadSpeed()
-			uploadSpeedStr := result.FormatUploadSpeed()
-
-			// 添加到节点名称中
-			newName += fmt.Sprintf(" ⬇%s ⬆%s", downloadSpeedStr, uploadSpeedStr)
-		}
-
-		// 添加流媒体解锁信息
-		if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
-			unlockResults := make([]string, 0)
-			for platform, unlockResult := range result.UnlockResults {
-				if unlockResult.Status == "Success" {
-					regionInfo := ""
-					if unlockResult.Region != "" {
-						regionInfo = "(" + unlockResult.Region + ")"
+		case "add":
+			// 在原始名称后添加新信息
+			newName = originalName
+			// 添加国旗和国家信息
+			if result.IpInfoResult.Country != "" {
+				// 添加国旗
+				if result.IpInfoResult.CountryFlag != "" {
+					newName += " " + result.IpInfoResult.CountryFlag
+				}
+				// 添加中文国家名称
+				if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
+					countryCount[chineseName] += 1
+					newName += chineseName
+					if countryCount[chineseName] >= 1 {
+						newName += fmt.Sprintf("%d", countryCount[chineseName])
 					}
-					unlockResults = append(unlockResults, platform+regionInfo)
+				}
+				// 添加风险信息
+				if result.IpInfoResult.RiskInfo != "" {
+					newName += " " + result.IpInfoResult.RiskInfo
+				}
+				// 添加地区信息
+				if result.IpInfoResult.Region != "" && result.IpInfoResult.Region != "N/A" {
+					newName += " " + result.IpInfoResult.Region
+				}
+				if result.IpInfoResult.City != "" && result.IpInfoResult.City != "N/A" {
+					newName += " " + result.IpInfoResult.City
 				}
 			}
-
-			if len(unlockResults) > 0 {
-				newName += " [" + strings.Join(unlockResults, "| ") + "]"
+			// 添加下载和上传速度信息（非Fast模式下）
+			if !*fastMode {
+				// 格式化下载和上传速度
+				downloadSpeedStr := result.FormatDownloadSpeed()
+				uploadSpeedStr := result.FormatUploadSpeed()
+				// 添加到节点名称中
+				newName += fmt.Sprintf(" ⬇%s ⬆%s", downloadSpeedStr, uploadSpeedStr)
+			}
+			// 添加流媒体解锁信息
+			if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
+				unlockResults := make([]string, 0)
+				for platform, unlockResult := range result.UnlockResults {
+					if unlockResult.Status == "Success" {
+						regionInfo := ""
+						if unlockResult.Region != "" {
+							regionInfo = "(" + unlockResult.Region + ")"
+						}
+						unlockResults = append(unlockResults, platform+regionInfo)
+					}
+				}
+				if len(unlockResults) > 0 {
+					newName += " [" + strings.Join(unlockResults, "| ") + "]"
+				}
+			}
+		case "overwrite":
+			fallthrough
+		default:
+			// 默认为overwrite模式，完全重写节点名称
+			// 添加国旗和国家信息
+			if result.IpInfoResult.Country != "" {
+				// 添加国旗
+				if result.IpInfoResult.CountryFlag != "" {
+					newName += result.IpInfoResult.CountryFlag
+				}
+				// 添加中文国家名称
+				if chineseName, ok := utils.CountryCodeMap[result.IpInfoResult.Country]; ok {
+					countryCount[chineseName] += 1
+					newName += chineseName
+					if countryCount[chineseName] >= 1 {
+						newName += fmt.Sprintf("%d", countryCount[chineseName])
+					}
+				}
+				// 添加风险信息
+				if result.IpInfoResult.RiskInfo != "" {
+					newName += " " + result.IpInfoResult.RiskInfo
+				}
+				// 添加地区信息
+				if result.IpInfoResult.Region != "" && result.IpInfoResult.Region != "N/A" {
+					newName += " " + result.IpInfoResult.Region
+				}
+				if result.IpInfoResult.City != "" && result.IpInfoResult.City != "N/A" {
+					newName += " " + result.IpInfoResult.City
+				}
+			} else {
+				// 如果没有国家信息，使用原始名称
+				newName = originalName
+			}
+			// 添加下载和上传速度信息（非Fast模式下）
+			if !*fastMode {
+				// 格式化下载和上传速度
+				downloadSpeedStr := result.FormatDownloadSpeed()
+				uploadSpeedStr := result.FormatUploadSpeed()
+				// 添加到节点名称中
+				newName += fmt.Sprintf(" ⬇%s ⬆%s", downloadSpeedStr, uploadSpeedStr)
+			}
+			// 添加流媒体解锁信息
+			if result.UnlockResults != nil && len(result.UnlockResults) > 0 {
+				unlockResults := make([]string, 0)
+				for platform, unlockResult := range result.UnlockResults {
+					if unlockResult.Status == "Success" {
+						regionInfo := ""
+						if unlockResult.Region != "" {
+							regionInfo = "(" + unlockResult.Region + ")"
+						}
+						unlockResults = append(unlockResults, platform+regionInfo)
+					}
+				}
+				if len(unlockResults) > 0 {
+					newName += " [" + strings.Join(unlockResults, "| ") + "]"
+				}
 			}
 		}
 
