@@ -470,7 +470,8 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 			time.Sleep(time.Duration(rand.Intn(200)+10*i) * time.Millisecond)
 
 			start := time.Now()
-			resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
+			// resp, err := client.Get(fmt.Sprintf("%s/__down?bytes=0", st.config.ServerURL))
+			resp, err := client.Get("https://www.gstatic.com/generate_204")
 			// resp, err := client.Get("http://www.gstatic.com/generate_204")
 			if err != nil {
 				failedPingsMutex.Lock()
@@ -479,7 +480,7 @@ func (st *SpeedTester) testLatency(proxy *CProxy) *latencyResult {
 				return
 			}
 			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
+			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
 				latencyResults <- time.Since(start)
 			} else {
 				failedPingsMutex.Lock()
