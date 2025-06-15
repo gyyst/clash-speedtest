@@ -36,7 +36,7 @@ func (ic *IPChecker) FetchScamalytics(ip string) (string, error) {
 
 	// 添加失败重试功能
 	var initialBody []byte
-	maxRetries := 3
+	maxRetries := 1
 	var lastErr error
 
 	for i := 0; i < maxRetries; i++ {
